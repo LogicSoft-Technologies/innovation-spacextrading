@@ -1,0 +1,745 @@
+// controllers/adminController.js
+import crypto from "crypto";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import Admin from "../models/admin.js";
+import { sendEmail } from "../utils/sendEmail.js";
+import User from "../models/user.js";
+import Payment from "../models/payment.js";
+import Deposit from "../models/Deposit.js";
+import Withdrawal from "../models/Withdrawal.js";
+import asyncHandler from "express-async-handler";
+import path from "path";
+
+/* ---------------- TOKEN GENERATOR ---------------- */
+const generateToken = (id) => {
+  return jwt.sign({ id }, process.env.JWT_SECRET, {
+    expiresIn: "7d",
+  });
+};
+
+/* ---------------- CREATE FIRST ADMIN ---------------- */
+export const createFirstAdmin = async (req, res) => {
+  try {
+    const adminExists = await Admin.findOne();
+    if (adminExists) {
+      return res.status(400).json({ message: "Admin already exists" });
+    }
+
+    const { firstName, lastName, email, password } = req.body;
+    if (!email) return res.status(400).json({ message: "Email is required" });
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    // Generate verification code once
+    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+    const admin = await Admin.create({
+      firstName,
+      lastName,
+      email,
+      password: hashedPassword,
+      verificationCode,
+      isVerified: false
+    });
+
+    await sendEmail({
+      to: email,
+      subject: "Verify your email",
+      text: `Your verification code is: ${verificationCode}`,
+      html: `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Verify Your Email</title>
+      </head>
+      <body style="margin:0; padding:0; font-family:Arial, sans-serif; background:#f5f5f5;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5; padding:40px 0;">
+          <tr>
+            <td align="center">
+              <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff; border-radius:12px; overflow:hidden; box-shadow:0 6px 20px rgba(0,0,0,0.1);">
+                <tr>
+                  <td style="background:#000000; text-align:center; padding:28px;">
+                    <h1 style="color:#ffffff; margin:0; font-size:26px;">Innovation SpaceX Trading</h1>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="background:#A72703; text-align:center; padding:20px 30px;">
+                    <h2 style="color:#ffffff; margin:0; font-size:22px;">Email Verification Required</h2>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:30px; color:#333; font-size:16px; line-height:1.6;">
+                    <p>Hello <b>${firstName}</b>,</p>
+                    <p>Welcome to <b>Innovation SpaceX Trading</b>! To activate your admin account, please use the verification code below:</p>
+                    <div style="background:#FFEFE6; padding:22px; border-radius:10px; margin:25px 0; text-align:center;">
+                      <p style="font-size:28px; color:#A72703; letter-spacing:4px; font-weight:bold; margin:0;">${verificationCode}</p>
+                    </div>
+                    <p>Enter this code on the verification page to complete your admin registration.</p>
+                    <div style="text-align:center; margin-top:30px;">
+                      <a href="https://innovationspacextrading.com/admin/verify" 
+                         style="background:#A72703; color:white; padding:12px 24px; text-decoration:none; border-radius:8px; font-size:16px; display:inline-block;">
+                        Verify Email
+                      </a>
+                    </div>
+                    <p style="color:#666; font-size:14px; margin-top:30px;">
+                      If you didn’t create this admin account, please contact support immediately.
+                    </p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="background:#000000; text-align:center; padding:18px;">
+                    <p style="color:#ffffff; font-size:13px; margin:0;">© ${new Date().getFullYear()} Innovation SpaceX Trading. All rights reserved.</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>`
+    });
+
+    res.status(201).json({
+      message: "Admin created. Please check your email for verification code.",
+      admin: { email: admin.email, isVerified: admin.isVerified },
+      verified: admin.isVerified,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+/* ---------------- SEND VERIFICATION CODE (RESEND) ---------------- */
+export const sendVerificationCode = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ message: "Email is required" });
+
+    const admin = await Admin.findOne({ email });
+    if (!admin) return res.status(404).json({ message: "Admin not found" });
+
+    // Generate a new code only for resend
+    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    admin.verificationCode = verificationCode;
+    await admin.save();
+
+    await sendEmail({
+      to: email,
+      subject: "Resend Verification Code",
+      text: `Your verification code is: ${verificationCode}`,
+      html: `<p>Hello <b>${admin.firstName || "Admin"}</b>,</p>
+             <p>Your new verification code is:</p>
+             <div style="background:#FFEFE6; padding:22px; border-radius:10px; text-align:center;">
+               <p style="font-size:28px; color:#A72703; font-weight:bold; margin:0;">${verificationCode}</p>
+             </div>
+             <p>Enter this code on the verification page to verify your account.</p>`
+    });
+
+    res.json({ message: "Verification code sent to your email" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+/* ---------------- VERIFY EMAIL ---------------- */
+export const verifyCode = async (req, res) => {
+  try {
+    const { email, code } = req.body;
+    const admin = await Admin.findOne({ email });
+
+    if (!admin) return res.status(404).json({ message: "Admin not found" });
+    if (admin.verificationCode !== code)
+      return res.status(400).json({ message: "Invalid verification code" });
+
+    admin.isVerified = true;
+    admin.verificationCode = undefined;
+    await admin.save();
+
+    const token = generateToken(admin._id);
+    res.json({ message: "Email successfully verified", token });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+/* ---------------- ADMIN LOGIN ---------------- */
+export const adminLogin = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    const admin = await Admin.findOne({ email });
+    if (!admin) return res.status(400).json({ message: "Invalid credentials" });
+
+    if (!admin.isVerified) {
+      return res
+        .status(401)
+        .json({ message: "Please verify your email before logging in" });
+    }
+
+    const isMatch = await bcrypt.compare(password, admin.password);
+    if (!isMatch)
+      return res.status(400).json({ message: "Invalid credentials" });
+
+    const token = generateToken(admin._id);
+    res.json({
+      token,
+      admin: {
+        email: admin.email,
+        name: `${admin.firstName} ${admin.lastName}`,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+/* ---------------- FORGOT PASSWORD ---------------- */
+export const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+    const admin = await Admin.findOne({ email });
+
+    if (!admin) return res.status(404).json({ message: "Admin not found" });
+
+    const resetToken = crypto.randomBytes(20).toString("hex");
+    admin.resetPasswordToken = resetToken;
+    admin.resetPasswordExpires = Date.now() + 15 * 60 * 1000; // 15 minutes
+    await admin.save();
+
+    const resetLink = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+
+    await sendEmail({
+      to: email,
+      subject: "Reset Your Password",
+      text: `Click this link to reset your password: ${resetLink}`,
+      html: `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Reset Password</title>
+      </head>
+      <body style="margin:0; padding:0; font-family:Arial, sans-serif; background:#f5f5f5;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5; padding:40px 0;">
+          <tr>
+            <td align="center">
+              <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff; border-radius:12px; overflow:hidden; box-shadow:0 6px 20px rgba(0,0,0,0.1);">
+
+                <!-- Header -->
+                <tr>
+                  <td style="background:#000000; text-align:center; padding:28px;">
+                    <h1 style="color:#ffffff; margin:0; font-size:26px;">Innovation SpaceX Trading</h1>
+                  </td>
+                </tr>
+
+                <!-- Banner -->
+                <tr>
+                  <td style="background:#A72703; text-align:center; padding:20px 30px;">
+                    <h2 style="color:#ffffff; margin:0; font-size:22px;">Password Reset Requested</h2>
+                  </td>
+                </tr>
+
+                <!-- Body -->
+                <tr>
+                  <td style="padding:30px; color:#333; font-size:16px; line-height:1.6;">
+                    <p>Hello <b>${admin.firstName || "Admin"}</b>,</p>
+                    <p>We received a request to reset your password. Click the button below to reset it. This link will expire in 15 minutes.</p>
+
+                    <div style="text-align:center; margin:30px 0;">
+                      <a href="${resetLink}" 
+                         style="background:#A72703; color:white; padding:12px 24px; text-decoration:none; border-radius:8px; font-size:16px; display:inline-block;">
+                        Reset Password
+                      </a>
+                    </div>
+
+                    <p>If you did not request a password reset, please ignore this email or contact support immediately.</p>
+                  </td>
+                </tr>
+
+                <!-- Footer -->
+                <tr>
+                  <td style="background:#000000; text-align:center; padding:18px;">
+                    <p style="color:#ffffff; font-size:13px; margin:0;">
+                      © ${new Date().getFullYear()} Innovation SpaceX Trading. All rights reserved.
+                    </p>
+                  </td>
+                </tr>
+
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+      `
+    });
+
+    res.json({ message: "Password reset link sent" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+/* ---------------- RESET PASSWORD ---------------- */
+export const resetPassword = async (req, res) => {
+  try {
+    const admin = await Admin.findOne({
+      resetPasswordToken: req.params.token,
+      resetPasswordExpires: { $gt: Date.now() },
+    });
+
+    if (!admin)
+      return res.status(400).json({ message: "Invalid or expired token" });
+
+    const { password } = req.body;
+    admin.password = await bcrypt.hash(password, 10);
+    admin.resetPasswordToken = undefined;
+    admin.resetPasswordExpires = undefined;
+    await admin.save();
+
+    res.json({ message: "Password reset successful" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+/* ---------------- CHANGE PASSWORD (ADMIN) ---------------- */
+export const changePassword = async (req, res) => {
+  try {
+    const admin = await Admin.findById(req.admin._id);
+    const { currentPassword, newPassword } = req.body;
+
+    const isMatch = await bcrypt.compare(currentPassword, admin.password);
+    if (!isMatch)
+      return res.status(400).json({ message: "Current password is incorrect" });
+
+    admin.password = await bcrypt.hash(newPassword, 10);
+    await admin.save();
+
+    res.json({ message: "Password updated successfully" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+/* ---------------- GET ADMIN PROFILE ---------------- */
+export const getProfile = async (req, res) => {
+  try {
+    res.json({ admin: req.admin });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Get all users with their pending transactions
+export const getAllUsersWithRequests = async (req, res) => {
+  try {
+    const users = await User.find().select("-password -verificationCode");
+
+    const usersWithRequests = await Promise.all(
+      users.map(async (user) => {
+        const pendingInvestments = await Payment.find({
+          user: user._id,
+          status: "pending",
+        });
+        const pendingDeposits = await Deposit.find({
+          user: user._id,
+          status: "pending",
+        });
+        const pendingWithdrawals = await Withdrawal.find({
+          user: user._id,
+          status: "pending",
+        });
+
+        return {
+          ...user.toObject(),
+          pendingInvestments,
+          pendingDeposits,
+          pendingWithdrawals,
+        };
+      })
+    );
+
+    res.json(usersWithRequests);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Approve a user deposit
+export const adminApproveDeposit = asyncHandler(async (req, res) => {
+  const { depositId } = req.params;
+  const deposit = await Deposit.findById(depositId).populate("user");
+  if (!deposit) return res.status(404).json({ message: "Deposit not found" });
+  if (deposit.status !== "pending")
+    return res.status(400).json({ message: "Already processed" });
+
+  deposit.status = "approved";
+  await deposit.save();
+
+  // Credit user wallet
+  deposit.user.walletBalance += deposit.amount;
+  await deposit.user.save();
+
+  const html = `
+  <div style="font-family: Arial, sans-serif; background:#f5f5f5; padding:40px;">
+    <div style="max-width:600px; margin:auto; background:white; border-radius:12px; overflow:hidden; box-shadow:0 6px 20px rgba(0,0,0,0.1);">
+
+      <!-- Header -->
+      <div style="background:#000000; padding:28px; text-align:center;">
+        <h1 style="color:#ffffff; margin:0; font-size:26px;">
+          Innovation SpaceX Trading
+        </h1>
+      </div>
+
+      <!-- Banner -->
+      <div style="background:#A72703; padding:20px 30px; text-align:center;">
+        <h2 style="color:white; margin:0; font-size:22px; font-weight:600;">Deposit Approved</h2>
+      </div>
+
+      <!-- Body -->
+      <div style="padding:30px;">
+        <p style="font-size:16px; color:#333;">Hello <b>${
+          deposit.user.firstName
+        }</b>,</p>
+
+        <p style="font-size:16px; color:#333; line-height:1.6;">
+          Your deposit request has been 
+          <span style="color:#A72703; font-weight:bold;">successfully approved</span>.
+        </p>
+
+        <div style="background:#FFEFE6; padding:20px; border-radius:10px; margin:25px 0;">
+          <p style="font-size:16px; margin:0; color:#7C1B01; line-height:1.6;">
+            <strong>Amount:</strong> $${deposit.amount}<br/>
+            <strong>Status:</strong> Approved<br/>
+            <strong>Wallet Updated:</strong> Yes
+          </p>
+        </div>
+
+        <p style="font-size:16px; color:#333; line-height:1.6;">
+          You can now continue trading, investing, or managing your funds within your dashboard.
+        </p>
+
+        <div style="text-align:center; margin-top:30px;">
+          <a href="https://innovationspacextrading.com/dashboard" 
+            style="background:#A72703; color:white; padding:12px 24px; text-decoration:none; 
+                   border-radius:8px; font-size:16px; display:inline-block;">
+            Go to Dashboard
+          </a>
+        </div>
+
+        <p style="font-size:14px; color:#666; margin-top:30px;">
+          If you did not authorize this transaction, contact our support team immediately.
+        </p>
+      </div>
+
+      <!-- Footer -->
+      <div style="background:#000000; padding:18px; text-align:center;">
+        <p style="color:#ffffff; font-size:13px; margin:0;">
+          © ${new Date().getFullYear()} Innovation SpaceX Trading. All rights reserved.
+        </p>
+      </div>
+
+    </div>
+  </div>
+  `;
+
+  await sendEmail({
+    to: deposit.user.email,
+    subject: "Your Deposit Has Been Approved ✔",
+    text: `Hi ${deposit.user.firstName}, your deposit of $${deposit.amount} has been approved.`,
+    html,
+  });
+
+  res.json({ message: "Deposit approved", deposit });
+});
+
+// ---------------- DEPOSIT REJECTED ----------------
+export const adminRejectDeposit = asyncHandler(async (req, res) => {
+  const { depositId } = req.params;
+  const deposit = await Deposit.findById(depositId).populate("user");
+  if (!deposit) return res.status(404).json({ message: "Deposit not found" });
+
+  deposit.status = "rejected";
+  await deposit.save();
+
+  await sendEmail({
+    to: deposit.user.email,
+    subject: "Deposit Rejected",
+    text: `Hi ${deposit.user.firstName}, your deposit of $${deposit.amount} has been rejected.`,
+    html: `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Deposit Rejected</title>
+    </head>
+    <body style="margin:0;padding:0;font-family:Arial,sans-serif;background:#f5f5f5;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;padding:40px 0;">
+        <tr>
+          <td align="center">
+            <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 6px 20px rgba(0,0,0,0.1);">
+              <tr>
+                <td style="background:#000000;text-align:center;padding:28px;">
+                  <h1 style="color:#ffffff;margin:0;font-size:26px;">Innovation SpaceX Trading</h1>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:30px;color:#333;font-size:16px;line-height:1.6;">
+                  <p>Hi <b>${deposit.user.firstName}</b>,</p>
+                  <p>Your deposit of <b>$${deposit.amount}</b> has been <span style="color:#A72703;font-weight:bold;">rejected</span>.</p>
+                  <p>If you believe this is an error or have questions, please contact our support team immediately.</p>
+                  <p style="margin-top:30px;">Thank you for using <b>Innovation SpaceX Trading</b>.</p>
+                </td>
+              </tr>
+              <tr>
+                <td style="background:#000000;text-align:center;padding:18px;">
+                  <p style="color:#ffffff;font-size:13px;margin:0;">© ${new Date().getFullYear()} Innovation SpaceX Trading. All rights reserved.</p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>`
+  });
+
+  res.json({ message: "Deposit rejected", deposit });
+});
+
+// ---------------- WITHDRAWAL APPROVED ----------------
+export const adminApproveWithdrawal = asyncHandler(async (req, res) => {
+  const { withdrawalId } = req.params;
+  const withdrawal = await Withdrawal.findById(withdrawalId).populate("user");
+  if (!withdrawal) return res.status(404).json({ message: "Withdrawal not found" });
+  if (withdrawal.status !== "pending") return res.status(400).json({ message: "Already processed" });
+
+  if (withdrawal.amount > withdrawal.user.walletBalance) {
+    return res.status(400).json({ message: "User has insufficient wallet balance" });
+  }
+
+  withdrawal.user.walletBalance -= withdrawal.amount;
+  await withdrawal.user.save();
+
+  withdrawal.status = "approved";
+  await withdrawal.save();
+
+  await sendEmail({
+    to: withdrawal.user.email,
+    subject: "Withdrawal Approved",
+    text: `Hi ${withdrawal.user.firstName}, your withdrawal of $${withdrawal.amount} has been approved.`,
+    html: `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Withdrawal Approved</title></head>
+    <body style="margin:0;padding:0;font-family:Arial,sans-serif;background:#f5f5f5;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;padding:40px 0;">
+        <tr><td align="center">
+          <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 6px 20px rgba(0,0,0,0.1);">
+            <tr><td style="background:#000000;text-align:center;padding:28px;">
+              <h1 style="color:#ffffff;margin:0;font-size:26px;">Innovation SpaceX Trading</h1>
+            </td></tr>
+            <tr><td style="padding:30px;color:#333;font-size:16px;line-height:1.6;">
+              <p>Hi <b>${withdrawal.user.firstName}</b>,</p>
+              <p>Your withdrawal request of <b>$${withdrawal.amount}</b> has been <span style="color:#A72703;font-weight:bold;">approved</span> and processed successfully.</p>
+              <p>Your updated wallet balance is: <b>$${withdrawal.user.walletBalance}</b></p>
+              <p style="margin-top:30px;">Thank you for trusting Innovation SpaceX Trading.</p>
+            </td></tr>
+            <tr><td style="background:#000000;text-align:center;padding:18px;">
+              <p style="color:#ffffff;font-size:13px;margin:0;">© ${new Date().getFullYear()} Innovation SpaceX Trading. All rights reserved.</p>
+            </td></tr>
+          </table>
+        </td></tr>
+      </table>
+    </body>
+    </html>`
+  });
+
+  res.json({ message: "Withdrawal approved", withdrawal });
+});
+
+// ---------------- WITHDRAWAL REJECTED ----------------
+export const adminRejectWithdrawal = asyncHandler(async (req, res) => {
+  const { withdrawalId } = req.params;
+  const withdrawal = await Withdrawal.findById(withdrawalId).populate("user");
+  if (!withdrawal) return res.status(404).json({ message: "Withdrawal not found" });
+
+  withdrawal.status = "rejected";
+  await withdrawal.save();
+
+  await sendEmail({
+    to: withdrawal.user.email,
+    subject: "Withdrawal Rejected",
+    text: `Hi ${withdrawal.user.firstName}, your withdrawal of $${withdrawal.amount} has been rejected.`,
+    html: `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Withdrawal Rejected</title></head>
+    <body style="margin:0;padding:0;font-family:Arial,sans-serif;background:#f5f5f5;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;padding:40px 0;">
+        <tr><td align="center">
+          <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 6px 20px rgba(0,0,0,0.1);">
+            <tr><td style="background:#000000;text-align:center;padding:28px;">
+              <h1 style="color:#ffffff;margin:0;font-size:26px;">Innovation SpaceX Trading</h1>
+            </td></tr>
+            <tr><td style="padding:30px;color:#333;font-size:16px;line-height:1.6;">
+              <p>Hi <b>${withdrawal.user.firstName}</b>,</p>
+              <p>Your withdrawal request of <b>$${withdrawal.amount}</b> has been <span style="color:#A72703;font-weight:bold;">rejected</span>.</p>
+              <p>If you have any questions, please contact our support team.</p>
+            </td></tr>
+            <tr><td style="background:#000000;text-align:center;padding:18px;">
+              <p style="color:#ffffff;font-size:13px;margin:0;">© ${new Date().getFullYear()} Innovation SpaceX Trading. All rights reserved.</p>
+            </td></tr>
+          </table>
+        </td></tr>
+      </table>
+    </body>
+    </html>`
+  });
+
+  res.json({ message: "Withdrawal rejected", withdrawal });
+});
+
+// ---------------- INVESTMENT APPROVED ----------------
+export const adminApprovePayment = asyncHandler(async (req, res) => {
+  const { paymentId } = req.params;
+  const payment = await Payment.findById(paymentId).populate("user");
+  if (!payment) return res.status(404).json({ message: "Payment not found" });
+  if (payment.status !== "pending") return res.status(400).json({ message: "Already processed" });
+
+  payment.status = "approved";
+  payment.approvedAt = new Date();
+  payment.completedAt = new Date(Date.now() + 6 * 60 * 60 * 1000); // 6 hours
+  payment.returns = payment.amount * 10;
+  await payment.save();
+
+  await sendEmail({
+    to: payment.user.email,
+    subject: "Investment Approved",
+    text: `Hi ${payment.user.firstName}, your investment of $${payment.amount} in ${payment.symbol} has been approved.`,
+    html: `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Investment Approved</title></head>
+    <body style="margin:0;padding:0;font-family:Arial,sans-serif;background:#f5f5f5;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;padding:40px 0;">
+        <tr><td align="center">
+          <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 6px 20px rgba(0,0,0,0.1);">
+            <tr><td style="background:#000000;text-align:center;padding:28px;">
+              <h1 style="color:#ffffff;margin:0;font-size:26px;">Innovation SpaceX Trading</h1>
+            </td></tr>
+            <tr><td style="padding:30px;color:#333;font-size:16px;line-height:1.6;">
+              <p>Hi <b>${payment.user.firstName}</b>,</p>
+              <p>Your investment of <b>$${payment.amount}</b> in <b>${payment.symbol}</b> has been <span style="color:#A72703;font-weight:bold;">approved</span>.</p>
+              <p>Your investment will mature in 6 hours with expected returns of <b>$${payment.returns}</b>.</p>
+              <p>Thank you for investing with Innovation SpaceX Trading.</p>
+            </td></tr>
+            <tr><td style="background:#000000;text-align:center;padding:18px;">
+              <p style="color:#ffffff;font-size:13px;margin:0;">© ${new Date().getFullYear()} Innovation SpaceX Trading. All rights reserved.</p>
+            </td></tr>
+          </table>
+        </td></tr>
+      </table>
+    </body>
+    </html>`
+  });
+
+  res.json({ message: "Investment approved", payment });
+});
+
+/* ---------------- GET DASHBOARD DATA ---------------- */
+export const getDashboardData = asyncHandler(async (req, res) => {
+  const totalUsers = await User.countDocuments();
+  const pendingDeposits = await Deposit.countDocuments({ status: "pending" });
+  const pendingWithdrawals = await Withdrawal.countDocuments({
+    status: "pending",
+  });
+  const pendingPayments = await Payment.countDocuments({ status: "pending" });
+
+  res.json({
+    totalUsers,
+    pendingDeposits,
+    pendingWithdrawals,
+    pendingPayments,
+  });
+});
+
+export const adminSendEmail = asyncHandler(async (req, res) => {
+  const { userId, subject, text } = req.body;
+  const file = req.file;
+
+  if (!userId || !subject || !text) {
+    return res
+      .status(400)
+      .json({ message: "Please provide user, subject and message" });
+  }
+
+  const user = await User.findById(userId);
+  if (!user) return res.status(404).json({ message: "User not found" });
+
+  const emailData = {
+    to: user.email,
+    subject,
+    text,
+    html: `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>${subject}</title>
+      </head>
+      <body style="margin:0; padding:0; font-family:Arial, sans-serif; background:#f5f5f5;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5; padding:40px 0;">
+          <tr>
+            <td align="center">
+              <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff; border-radius:12px; overflow:hidden; box-shadow:0 6px 20px rgba(0,0,0,0.1);">
+                <tr>
+                  <td style="background:#000000; text-align:center; padding:28px;">
+                    <h1 style="color:#ffffff; margin:0; font-size:26px;">Innovation SpaceX Trading</h1>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:30px; color:#333; font-size:16px; line-height:1.6;">
+                    <p>Hi <b>${user.firstName}</b>,</p>
+                    <p>${text}</p>
+                    <div style="text-align:center; margin-top:30px;">
+                      <a href="https://innovationspacextrading.com/dashboard" 
+                         style="background:#A72703; color:white; padding:12px 24px; text-decoration:none; border-radius:8px; font-size:16px; display:inline-block;">
+                        Go to Dashboard
+                      </a>
+                    </div>
+                    <p style="color:#666; font-size:14px; margin-top:30px;">
+                      If you didn’t expect this email, please contact support immediately.
+                    </p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="background:#000000; text-align:center; padding:18px;">
+                    <p style="color:#ffffff; font-size:13px; margin:0;">© ${new Date().getFullYear()} Innovation SpaceX Trading. All rights reserved.</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+    `,
+  };
+
+  if (file) {
+    emailData.attachments = [
+      {
+        filename: file.originalname,
+        path: path.resolve(file.path),
+      },
+    ];
+  }
+
+  await sendEmail(emailData);
+  res.json({ message: `Email sent to ${user.email}` });
+});

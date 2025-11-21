@@ -1,0 +1,49 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Manrope:wght@200..800&display=swap');
+
+:root {
+    /* Grid */
+    --grid-cols-auto: repeat(auto-fill, minmax(200px, 1fr));
+
+    /* Brand Colors */
+    --color-black: #000000;
+    --color-white: #ffffff;
+    --color-accent: #A72703; 
+    --color-accent-light: #FFEFE6; 
+    --color-accent-dark: #7C1B01; 
+
+    /* Text Colors */
+    --text-primary: #000000;
+    --text-secondary: #1C0245;
+    --text-muted: #00000080; 
+
+    --border-light: #0000001A; 
+    --shadow-light: #0000001F; 
+}
+
+@layer base {
+  *, ::before, ::after {
+    box-sizing: border-box;
+  }
+
+  body {
+    scroll-behavior: smooth;
+    background-color: var(--color-white);
+    color: var(--text-primary);
+    font-family: 'Inter', sans-serif;
+  }
+}
+
+/* Custom Utilities */
+@layer components {
+  .input-box {
+    @apply px-4 py-2 rounded-lg border border-gray-300
+           focus:outline-none focus:ring-2 focus:ring-blue-300;
+  }
+}
+
+@layer utilities {
+  ::-webkit-scrollbar {
+    @apply hidden;
+  }
+}
