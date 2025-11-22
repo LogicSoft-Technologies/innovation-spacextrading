@@ -25,8 +25,7 @@ export const userSignup = async (req, res) => {
 
   const user = await User.create({ firstName, lastName, email, password, verificationCode });
 
-  // Send verification email with HTML design
-  await sendEmail({
+  sendEmail({
     to: email,
     subject: "Verify Your Email",
     text: `Your verification code is ${verificationCode}`,
@@ -76,7 +75,7 @@ export const userSignup = async (req, res) => {
       </body>
       </html>
     `,
-  });
+  }).catch(err => console.error("Email send error:", err));
 
   const token = generateToken(user._id);
   res.status(201).json({ token, verified: false, email });

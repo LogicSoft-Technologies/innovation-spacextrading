@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import { useState, useContext } from "react";
 import { AlertCircle } from "lucide-react";
 import { AuthContext } from "../Context/AuthContext";
+import { useNavigate } from "react-router-dom"
 
 import heroImg from "../assets/spaceX.png";
 import spacexIcon from "../assets/spacex-icon.png";
@@ -9,8 +10,8 @@ import teslaIcon from "../assets/tesla-icon.png";
 import cryptoIcon from "../assets/crypto-icon.png";
 
 const Hero = () => {
-  const { user } = useContext(AuthContext);         // ✅ get authenticated user
-  const isAuthenticated = !!user;                   // ✅ convert to boolean
+  const { user } = useContext(AuthContext);
+  const isAuthenticated = !!user;
   const [showAlert, setShowAlert] = useState(false);
 
   const requireAuth = (callback) => {
@@ -22,15 +23,17 @@ const Hero = () => {
     callback();
   };
 
+  const navigate = useNavigate();
+
   const handleDashboardClick = () => {
     requireAuth(() => {
-      window.location.href = "/dashboard";
+      navigate("/dashboard");
     });
   };
 
   const handleMarketClick = () => {
     requireAuth(() => {
-      window.location.href = "/dashboard/markets";
+      navigate("/dashboard/markets");
     });
   };
 
@@ -40,7 +43,6 @@ const Hero = () => {
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_25%_20%,#FFEFE6_0%,transparent_40%),radial-gradient(circle_at_75%_80%,#A72703_0%,transparent_40%)] opacity-20 pointer-events-none"></div>
 
       <div className="relative z-10 flex flex-col lg:flex-row items-center justify-between gap-12 px-6 lg:px-24">
-        
         {/* LEFT TEXT SECTION */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -56,8 +58,8 @@ const Hero = () => {
           </h1>
 
           <p className="mt-5 text-base sm:text-lg text-black/70 max-w-md mx-auto lg:mx-0 leading-relaxed font-[Inter]">
-            Take control of your investments in a futuristic ecosystem built
-            for visionaries — from{" "}
+            Take control of your investments in a futuristic ecosystem built for
+            visionaries — from{" "}
             <span className="font-medium text-[#A72703]">SpaceX</span> projects
             to <span className="font-medium text-[#A72703]">Tesla</span> stocks
             and <span className="font-medium text-[#A72703]">Crypto</span>{" "}
@@ -66,7 +68,6 @@ const Hero = () => {
 
           {/* BUTTONS */}
           <div className="mt-8 flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4">
-            
             {/* Start Investing */}
             <button
               onClick={handleDashboardClick}
@@ -114,13 +115,32 @@ const Hero = () => {
       {/* STATS CARD */}
       <div className="absolute left-1/2 bottom-0 translate-y-1/2 transform -translate-x-1/2 w-[92%] sm:w-[90%] md:w-[80%] lg:w-[73%] bg-white rounded-2xl px-6 sm:px-10 shadow-lg py-10 grid grid-cols-1 sm:grid-cols-3 gap-6 z-20 border border-[#FFEFE6]/50 backdrop-blur-md">
         {[
-          { icon: spacexIcon, value: "5+", label: "Years of innovative SpaceX trading" },
-          { icon: teslaIcon, value: "$120M+", label: "Total investments in Tesla & crypto" },
-          { icon: cryptoIcon, value: "45,000+", label: "Active investors on the platform" }
+          {
+            icon: spacexIcon,
+            value: "5+",
+            label: "Years of innovative SpaceX trading",
+          },
+          {
+            icon: teslaIcon,
+            value: "$120M+",
+            label: "Total investments in Tesla & crypto",
+          },
+          {
+            icon: cryptoIcon,
+            value: "45,000+",
+            label: "Active investors on the platform",
+          },
         ].map((item, i) => (
-          <div key={i} className="flex flex-col items-center justify-center gap-3 text-center">
+          <div
+            key={i}
+            className="flex flex-col items-center justify-center gap-3 text-center"
+          >
             <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full border-4 border-black/20 bg-gradient-to-br from-white to-[#FFEFE6] flex items-center justify-center shadow-md hover:shadow-lg transition-all">
-              <img src={item.icon} alt={item.label} className="w-8 h-8 sm:w-14 sm:h-14 object-contain rounded-full" />
+              <img
+                src={item.icon}
+                alt={item.label}
+                className="w-8 h-8 sm:w-14 sm:h-14 object-contain rounded-full"
+              />
             </div>
             <motion.h3
               initial={{ opacity: 0, y: 10 }}

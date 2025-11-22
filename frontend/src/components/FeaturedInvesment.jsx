@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import spacexImg from "../assets/spacex-image.png";
 import teslaImg from "../assets/tesla-image.jpg";
 import cryptoImg from "../assets/crypto-growth.png";
+import { Link } from "react-router-dom";
 
 const investments = [
   {
@@ -9,18 +10,21 @@ const investments = [
     description:
       "Gain exclusive access to SpaceX private share opportunities — invest in the future of interplanetary innovation. These funds focus on aerospace growth, research, and technology advancements.",
     image: spacexImg,
+    path: "/markets/spacex",
   },
   {
     title: "Tesla Stock Bundles",
     description:
       "Diversify your portfolio with high-performing Tesla stock bundles. Designed for investors who believe in clean energy, self-driving technology, and sustainable innovation.",
     image: teslaImg,
+    path: "/markets/tesla",
   },
   {
     title: "Crypto Growth Portfolios",
     description:
       "Explore our expertly curated cryptocurrency growth portfolios. Balanced for risk and reward, these portfolios include top-performing digital assets and emerging blockchain projects.",
     image: cryptoImg,
+    path: "/markets/crypto",
   },
 ];
 
@@ -69,9 +73,13 @@ const FeaturedInvestments = () => {
               <p className="text-black/70 leading-relaxed mb-8">
                 {item.description}
               </p>
-              <button className="px-6 py-3 bg-black text-white rounded-xl text-sm font-medium hover:bg-[#222] transition-all shadow-md hover:shadow-lg">
+
+              <Link
+                to={item.path}
+                className="px-6 py-3 bg-black text-white rounded-xl text-sm font-medium hover:bg-[#222] transition-all shadow-md hover:shadow-lg inline-block"
+              >
                 Learn More
-              </button>
+              </Link>
             </div>
           </motion.div>
         ))}

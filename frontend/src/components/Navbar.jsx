@@ -34,43 +34,105 @@ const Navbar = () => {
     {
       name: "Markets",
       links: [
-        { name: "SpaceX", icon: TrendingUp, desc: "Invest in SpaceX projects", path: "/markets/spacex" },
-        { name: "Tesla Stocks", icon: BarChart3, desc: "Trade and invest in Tesla shares", path: "/markets/tesla" },
-        { name: "Crypto Market", icon: Coins, desc: "Access top cryptocurrencies", path: "/markets/crypto" },
+        {
+          name: "SpaceX",
+          icon: TrendingUp,
+          desc: "Invest in SpaceX projects",
+          path: "/markets/spacex",
+        },
+        {
+          name: "Tesla Stocks",
+          icon: BarChart3,
+          desc: "Trade and invest in Tesla shares",
+          path: "/markets/tesla",
+        },
+        {
+          name: "Crypto Market",
+          icon: Coins,
+          desc: "Access top cryptocurrencies",
+          path: "/markets/crypto",
+        },
       ],
     },
     {
       name: "Invest",
       links: [
-        { name: "Start Investing", icon: TrendingUp, desc: "Create a new investment plan", path: "/dashboard/markets" },
-        { name: "My Investments", icon: BarChart3, desc: "Track your investment portfolio", path: "/dashboard/investments" },
-        { name: "Performance", icon: Info, desc: "Analyze returns and metrics", path: "/dashboard/performance" },
-        { name: "Withdraw", icon: Coins, desc: "Manage withdrawals or payouts", path: "/dashboard/finance/withdrawal" },
+        {
+          name: "Start Investing",
+          icon: TrendingUp,
+          desc: "Create a new investment plan",
+          path: "/dashboard/markets",
+        },
+        {
+          name: "My Investments",
+          icon: BarChart3,
+          desc: "Track your investment portfolio",
+          path: "/dashboard/investments",
+        },
+        {
+          name: "Performance",
+          icon: Info,
+          desc: "Analyze returns and metrics",
+          path: "/dashboard/performance",
+        },
+        {
+          name: "Withdraw",
+          icon: Coins,
+          desc: "Manage withdrawals or payouts",
+          path: "/dashboard/finance/withdrawal",
+        },
       ],
     },
     {
       name: "Insights",
       links: [
-        { name: "Market Trends", icon: TrendingUp, desc: "Explore trending markets", path: "/insights/trends" },
-        { name: "Reports", icon: BarChart3, desc: "Detailed investment insights", path: "/insights/reports" },
-        { name: "Education", icon: Info, desc: "Learn to invest smartly", path: "/insights/education" },
-      ],
-    },
-    {
-      name: "Earn",
-      links: [
-        { name: "Affiliate Program", icon: Users, desc: "Invite friends & earn", path: "/earn/affiliate" },
-        { name: "Rewards", icon: Coins, desc: "Claim your bonuses", path: "/earn/rewards" },
-        { name: "Bonuses", icon: BarChart3, desc: "Exclusive limited-time offers", path: "/earn/bonuses" },
+        {
+          name: "Market Trends",
+          icon: TrendingUp,
+          desc: "Explore trending markets",
+          path: "/insights/trends",
+        },
+        {
+          name: "Reports",
+          icon: BarChart3,
+          desc: "Detailed investment insights",
+          path: "/insights/reports",
+        },
+        {
+          name: "Education",
+          icon: Info,
+          desc: "Learn to invest smartly",
+          path: "/insights/education",
+        },
       ],
     },
     {
       name: "Company",
       links: [
-        { name: "About", icon: Info, desc: "Learn more about us", path: "/company/about" },
-        { name: "Vision", icon: TrendingUp, desc: "Our future goals", path: "/company/vision" },
-        { name: "Team", icon: Users, desc: "Meet the team", path: "/company/team" },
-        { name: "Contact", icon: Globe, desc: "Get support or inquiries", path: "/company/contact" },
+        {
+          name: "About",
+          icon: Info,
+          desc: "Learn more about us",
+          path: "/company/about",
+        },
+        {
+          name: "Vision",
+          icon: TrendingUp,
+          desc: "Our future goals",
+          path: "/company/vision",
+        },
+        {
+          name: "Team",
+          icon: Users,
+          desc: "Meet the team",
+          path: "/company/team",
+        },
+        {
+          name: "Contact",
+          icon: Globe,
+          desc: "Get support or inquiries",
+          path: "/company/contact",
+        },
       ],
     },
   ];
@@ -88,7 +150,10 @@ const Navbar = () => {
     <nav className="flex items-center justify-between px-6 lg:px-24 py-3 border-b border-black/10 bg-white relative z-50 backdrop-blur-md">
       {/* Logo & Desktop Links */}
       <div className="flex items-center gap-8">
-        <Link to="/" className="flex items-center font-bold text-2xl text-black gap-2">
+        <Link
+          to="/"
+          className="flex items-center font-bold text-2xl text-black gap-2"
+        >
           <img src={logo} alt="Space-X logo" className="w-34 h-12 rounded-xl" />
         </Link>
 
@@ -98,17 +163,37 @@ const Navbar = () => {
             <div
               key={index}
               className="relative text-sm"
-              onMouseEnter={() => { clearTimeout(window.dropdownTimeout); setOpenMenu(index); }}
-              onMouseLeave={() => { window.dropdownTimeout = setTimeout(() => setOpenMenu(null), 200); }}
+              onMouseEnter={() => {
+                clearTimeout(window.dropdownTimeout);
+                setOpenMenu(index);
+              }}
+              onMouseLeave={() => {
+                window.dropdownTimeout = setTimeout(
+                  () => setOpenMenu(null),
+                  200
+                );
+              }}
             >
-              <button className="hover:text-[#A72703] transition-colors">{item.name}</button>
+              <button className="hover:text-[#A72703] transition-colors">
+                {item.name}
+              </button>
 
               <div
                 className={`absolute top-full left-0 mt-8 w-[480px] bg-white/95 backdrop-blur-md border border-black/10 rounded-xl p-5 grid grid-cols-2 transition-all duration-200 ${
-                  openMenu === index ? "opacity-100 visible" : "opacity-0 invisible pointer-events-none"
+                  openMenu === index
+                    ? "opacity-100 visible"
+                    : "opacity-0 invisible pointer-events-none"
                 }`}
-                onMouseEnter={() => { clearTimeout(window.dropdownTimeout); setOpenMenu(index); }}
-                onMouseLeave={() => { window.dropdownTimeout = setTimeout(() => setOpenMenu(null), 200); }}
+                onMouseEnter={() => {
+                  clearTimeout(window.dropdownTimeout);
+                  setOpenMenu(index);
+                }}
+                onMouseLeave={() => {
+                  window.dropdownTimeout = setTimeout(
+                    () => setOpenMenu(null),
+                    200
+                  );
+                }}
               >
                 {item.links.map((link, i) => (
                   <Link
@@ -120,8 +205,12 @@ const Navbar = () => {
                       <link.icon className="w-5 h-5" />
                     </div>
                     <div className="flex flex-col">
-                      <span className="font-semibold leading-tight text-black">{link.name}</span>
-                      <p className="text-xs text-black/50 leading-tight">{link.desc}</p>
+                      <span className="font-semibold leading-tight text-black">
+                        {link.name}
+                      </span>
+                      <p className="text-xs text-black/50 leading-tight">
+                        {link.desc}
+                      </p>
                     </div>
                   </Link>
                 ))}
@@ -133,7 +222,10 @@ const Navbar = () => {
 
       {/* Right side */}
       <div className="flex items-center gap-5 font-medium font-[Inter] relative">
-        <button className="flex items-center gap-1 text-black/60 hover:text-[#A72703] transition-colors mr-3" title="Change language">
+        <button
+          className="flex items-center gap-1 text-black/60 hover:text-[#A72703] transition-colors mr-3"
+          title="Change language"
+        >
           <Globe className="w-5 h-5" />
         </button>
 
@@ -172,7 +264,11 @@ const Navbar = () => {
                   className="w-10 h-10 rounded-full overflow-hidden border-2 border-[#A72703] flex items-center justify-center"
                 >
                   {profilePhotoUrl ? (
-                    <img src={profilePhotoUrl} alt="Profile" className="w-full h-full object-cover" />
+                    <img
+                      src={profilePhotoUrl}
+                      alt="Profile"
+                      className="w-full h-full object-cover"
+                    />
                   ) : (
                     <UserIcon className="w-6 h-6 text-[#A72703]" />
                   )}
@@ -180,7 +276,7 @@ const Navbar = () => {
 
                 {openProfileCard && (
                   <div className="absolute right-0 mt-2 w-44 bg-white shadow-lg rounded-xl text-gray-700 z-50">
-                  <Link
+                    <Link
                       to="/change-password"
                       className="block px-4 py-2 hover:bg-[#FFEFE6] rounded-t-xl"
                       onClick={() => setOpenProfileCard(false)}
@@ -208,8 +304,15 @@ const Navbar = () => {
         </div>
 
         {/* Mobile Toggle */}
-        <button className="lg:hidden text-[#A72703]" onClick={() => setMobileOpen(!mobileOpen)}>
-          {mobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+        <button
+          className="lg:hidden text-[#A72703]"
+          onClick={() => setMobileOpen(!mobileOpen)}
+        >
+          {mobileOpen ? (
+            <X className="w-6 h-6" />
+          ) : (
+            <Menu className="w-6 h-6" />
+          )}
         </button>
       </div>
 
@@ -227,13 +330,17 @@ const Navbar = () => {
               >
                 {item.name}
                 <ChevronDown
-                  className={`w-5 h-5 transition-transform duration-300 ${activeMobileCard === index ? "rotate-180" : ""}`}
+                  className={`w-5 h-5 transition-transform duration-300 ${
+                    activeMobileCard === index ? "rotate-180" : ""
+                  }`}
                 />
               </button>
 
               <div
                 className={`grid grid-cols-2 gap-3 px-4 transition-all duration-300 ${
-                  activeMobileCard === index ? "max-h-[300px] py-3 opacity-100" : "max-h-0 opacity-0 pointer-events-none"
+                  activeMobileCard === index
+                    ? "max-h-[300px] py-3 opacity-100"
+                    : "max-h-0 opacity-0 pointer-events-none"
                 }`}
               >
                 {item.links.map((link, i) => (
@@ -254,20 +361,37 @@ const Navbar = () => {
           {/* Mobile login/signup/dashboard */}
           {!isLoggedIn ? (
             <div className="flex flex-col gap-2 mt-3">
-              <Link to="/sign-in" className="px-4 py-2 bg-[#FFEFE6] text-[#A72703] rounded-lg text-center">
+              <Link
+                to="/sign-in"
+                className="px-4 py-2 bg-[#FFEFE6] text-[#A72703] rounded-lg text-center"
+                onClick={() => setMobileOpen(false)}
+              >
                 Log in
               </Link>
-              <Link to="/sign-up" className="px-4 py-2 bg-[#A72703] text-white rounded-lg text-center">
+
+              <Link
+                to="/sign-up"
+                className="px-4 py-2 bg-[#A72703] text-white rounded-lg text-center"
+                onClick={() => setMobileOpen(false)}
+              >
                 Sign up
               </Link>
             </div>
           ) : (
             <>
-              <Link to="/dashboard" className="px-4 py-2 bg-[#FFEFE6] text-[#A72703] rounded-lg text-center mt-3">
+              <Link
+                to="/dashboard"
+                className="px-4 py-2 bg-[#FFEFE6] text-[#A72703] rounded-lg text-center mt-3"
+                onClick={() => setMobileOpen(false)}
+              >
                 Dashboard
               </Link>
+
               <button
-                onClick={handleLogout}
+                onClick={() => {
+                  setMobileOpen(false);
+                  handleLogout();
+                }}
                 className="px-4 py-2 bg-[#FFEFE6] text-[#A72703] rounded-lg text-center mt-2"
               >
                 Logout
