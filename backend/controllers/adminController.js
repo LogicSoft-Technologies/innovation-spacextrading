@@ -10,7 +10,10 @@ import Deposit from "../models/Deposit.js";
 import Withdrawal from "../models/Withdrawal.js";
 import asyncHandler from "express-async-handler";
 import path from "path";
-import { calculateInvestmentReturns } from "../utils/investmentCalculator.js";
+import {
+  getDurationInDays,
+  calculateInvestmentReturns,
+} from "../utils/investmentCalculator.js";
 
 /* ---------------- TOKEN GENERATOR ---------------- */
 const generateToken = (id) => {
@@ -618,7 +621,14 @@ export const adminApprovePayment = asyncHandler(async (req, res) => {
     return res.status(400).json({ message: "Already processed" });
   }
 
-  if (!payment.durationDays || payment.durationDays <= 0) {
+  let durationDays = Number(payment.durationDays || 0);
+
+  if ((!durationDays || durationDays <= 0) && payment.durationValue && payment.durationUnit) {
+    durationDays = getDurationInDays(payment.durationValue, payment.durationUnit);
+    payment.durationDays = durationDays;
+  }
+
+  if (!durationDays || durationDays <= 0) {
     return res.status(400).json({
       message: "Investment duration is missing or invalid",
     });
@@ -626,29 +636,32 @@ export const adminApprovePayment = asyncHandler(async (req, res) => {
 
   const { profit, returns, twoDayCycles } = calculateInvestmentReturns(
     payment.amount,
-    payment.durationDays
+    durationDays
   );
 
   const approvedAt = new Date();
   const completedAt = new Date(
-    approvedAt.getTime() + payment.durationDays * 24 * 60 * 60 * 1000
+    approvedAt.getTime() + durationDays * 24 * 60 * 60 * 1000
   );
 
   payment.status = "approved";
   payment.approvedAt = approvedAt;
   payment.completedAt = completedAt;
+  payment.durationDays = durationDays;
   payment.twoDayCycles = twoDayCycles;
   payment.profit = profit;
   payment.returns = returns;
 
   await payment.save();
 
-  const dashboardUrl = `${process.env.FRONTEND_URL || "https://innovationspacextrading.com"}/dashboard`;
+  const dashboardUrl = `${
+    process.env.FRONTEND_URL || "https://innovationspacextrading.com"
+  }/dashboard`;
 
   await sendEmail({
     to: payment.user.email,
     subject: "Your Investment Has Been Approved",
-    text: `Hi ${payment.user.firstName}, your investment of $${payment.amount} in ${payment.symbol} has been approved. Profit rule: 30% every 2 days. Expected profit: $${profit}. Final return: $${returns}.`,
+    text: `Hi ${payment.user.firstName}, your investment of $${payment.amount} in ${payment.symbol} has been approved. It will mature after ${durationDays} days. Profit rule: 30% every 2 days. Final return: $${returns}.`,
     html: `
       <!DOCTYPE html>
       <html lang="en">
@@ -688,13 +701,13 @@ export const adminApprovePayment = asyncHandler(async (req, res) => {
                         <td style="width:50%;padding:10px;">
                           <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;">
                             <p style="margin:0;color:#64748b;font-size:12px;text-transform:uppercase;font-weight:700;">Invested Amount</p>
-                            <p style="margin:8px 0 0;color:#0f172a;font-size:22px;font-weight:800;">$${Number(payment.amount).toLocaleString()}</p>
+                            <p style="margin:8px 0 0;color:#0f172a;font-size:22px;font-weight:800;">$${Number(payment.amount || 0).toLocaleString()}</p>
                           </div>
                         </td>
                         <td style="width:50%;padding:10px;">
                           <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:16px;">
                             <p style="margin:0;color:#15803d;font-size:12px;text-transform:uppercase;font-weight:700;">Expected Profit</p>
-                            <p style="margin:8px 0 0;color:#15803d;font-size:22px;font-weight:800;">$${Number(profit).toLocaleString()}</p>
+                            <p style="margin:8px 0 0;color:#15803d;font-size:22px;font-weight:800;">$${Number(profit || 0).toLocaleString()}</p>
                           </div>
                         </td>
                       </tr>
@@ -702,13 +715,19 @@ export const adminApprovePayment = asyncHandler(async (req, res) => {
                         <td style="width:50%;padding:10px;">
                           <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:16px;">
                             <p style="margin:0;color:#9a3412;font-size:12px;text-transform:uppercase;font-weight:700;">Final Return</p>
-                            <p style="margin:8px 0 0;color:#A72703;font-size:22px;font-weight:800;">$${Number(returns).toLocaleString()}</p>
+                            <p style="margin:8px 0 0;color:#A72703;font-size:22px;font-weight:800;">$${Number(returns || 0).toLocaleString()}</p>
                           </div>
                         </td>
                         <td style="width:50%;padding:10px;">
                           <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:16px;">
                             <p style="margin:0;color:#1d4ed8;font-size:12px;text-transform:uppercase;font-weight:700;">Duration</p>
-                            <p style="margin:8px 0 0;color:#1e293b;font-size:22px;font-weight:800;">${payment.durationValue} ${payment.durationUnit}</p>
+                            <p style="margin:8px 0 0;color:#1e293b;font-size:22px;font-weight:800;">
+                              ${
+                                payment.durationValue && payment.durationUnit
+                                  ? `${payment.durationValue} ${payment.durationUnit}`
+                                  : `${durationDays} days`
+                              }
+                            </p>
                           </div>
                         </td>
                       </tr>
@@ -719,7 +738,7 @@ export const adminApprovePayment = asyncHandler(async (req, res) => {
                       <p style="margin:0;color:#475569;font-size:14px;line-height:1.8;">
                         Profit rule: <strong>30% every 2 days</strong><br/>
                         Profit cycles: <strong>${twoDayCycles}</strong><br/>
-                        Total duration: <strong>${payment.durationDays} days</strong><br/>
+                        Total duration: <strong>${durationDays} days</strong><br/>
                         Maturity date: <strong>${completedAt.toLocaleString()}</strong>
                       </p>
                     </div>

@@ -60,7 +60,7 @@ export const createPayment = async (req, res) => {
 
     const { profit, returns, twoDayCycles } = calculateInvestmentReturns(
       investmentAmount,
-      durationDays,
+      durationDays
     );
 
     const payment = await Payment.create({

@@ -4,11 +4,59 @@ import Deposit from "../models/Deposit.js";
 import Withdrawal from "../models/Withdrawal.js";
 import Payment from "../models/payment.js";
 import { sendEmail } from "../utils/sendEmail.js";
+import { calculateInvestmentReturns } from "../utils/investmentCalculator.js";
+
+const getComputedPaymentValues = (payment) => {
+  const amount = Number(payment.amount || 0);
+  const durationDays = Number(payment.durationDays || 0);
+
+  if (durationDays > 0) {
+    return calculateInvestmentReturns(amount, durationDays);
+  }
+
+  const returns = Number(payment.returns || 0);
+  const profit = Number(payment.profit || Math.max(returns - amount, 0));
+
+  return {
+    profit,
+    returns,
+    twoDayCycles: Number(payment.twoDayCycles || 0),
+  };
+};
+
+const recalculateWalletBalance = async (userId) => {
+  const deposits = await Deposit.find({ user: userId });
+  const withdrawals = await Withdrawal.find({ user: userId });
+  const payments = await Payment.find({ user: userId });
+
+  const totalDeposits = deposits
+    .filter((d) => d.status === "approved")
+    .reduce((sum, d) => sum + Number(d.amount || 0), 0);
+
+  const totalWithdrawals = withdrawals
+    .filter((w) => w.status === "approved")
+    .reduce((sum, w) => sum + Number(w.amount || 0), 0);
+
+  const completedReturns = payments
+    .filter((p) => p.status === "completed")
+    .reduce((sum, p) => {
+      const computed = getComputedPaymentValues(p);
+      return sum + Number(computed.returns || 0);
+    }, 0);
+
+  return {
+    walletBalance: totalDeposits - totalWithdrawals + completedReturns,
+    deposits,
+    withdrawals,
+    payments,
+    totalDeposits,
+    totalWithdrawals,
+  };
+};
 
 export const getUserDashboardData = async (req, res) => {
   try {
     const userId = req.user._id;
-
     const now = new Date();
 
     const maturedPayments = await Payment.find({
@@ -20,13 +68,12 @@ export const getUserDashboardData = async (req, res) => {
     for (const payment of maturedPayments) {
       if (payment.status !== "approved") continue;
 
-      const user = await User.findById(payment.user._id);
-      if (!user) continue;
-
-      user.walletBalance = (user.walletBalance || 0) + (payment.returns || 0);
-      await user.save();
+      const computed = getComputedPaymentValues(payment);
 
       payment.status = "completed";
+      payment.profit = computed.profit;
+      payment.returns = computed.returns;
+      payment.twoDayCycles = computed.twoDayCycles;
       await payment.save();
 
       try {
@@ -35,9 +82,9 @@ export const getUserDashboardData = async (req, res) => {
         }/dashboard`;
 
         await sendEmail({
-          to: user.email,
+          to: payment.user.email,
           subject: "Investment Matured",
-          text: `Congratulations ${user.firstName}, your investment of $${payment.amount} in ${payment.symbol} has matured. Your wallet has been credited with $${payment.returns}, including $${payment.profit || 0} profit.`,
+          text: `Congratulations ${payment.user.firstName}, your investment of $${payment.amount} in ${payment.symbol} has matured. Your wallet has been credited with $${computed.returns}, including $${computed.profit} profit.`,
           html: `
             <!DOCTYPE html>
             <html lang="en">
@@ -65,7 +112,7 @@ export const getUserDashboardData = async (req, res) => {
                       <tr>
                         <td style="padding:32px;">
                           <p style="margin:0 0 14px;font-size:16px;line-height:1.7;">
-                            Hi <strong>${user.firstName}</strong>,
+                            Hi <strong>${payment.user.firstName}</strong>,
                           </p>
 
                           <p style="margin:0 0 22px;font-size:16px;line-height:1.7;color:#334155;">
@@ -83,15 +130,16 @@ export const getUserDashboardData = async (req, res) => {
                               <td style="width:50%;padding:10px;">
                                 <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:16px;">
                                   <p style="margin:0;color:#15803d;font-size:12px;text-transform:uppercase;font-weight:700;">Profit Earned</p>
-                                  <p style="margin:8px 0 0;color:#15803d;font-size:22px;font-weight:800;">$${Number(payment.profit || 0).toLocaleString()}</p>
+                                  <p style="margin:8px 0 0;color:#15803d;font-size:22px;font-weight:800;">$${Number(computed.profit || 0).toLocaleString()}</p>
                                 </div>
                               </td>
                             </tr>
+
                             <tr>
                               <td style="width:50%;padding:10px;">
                                 <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:16px;">
                                   <p style="margin:0;color:#9a3412;font-size:12px;text-transform:uppercase;font-weight:700;">Wallet Credit</p>
-                                  <p style="margin:8px 0 0;color:#A72703;font-size:22px;font-weight:800;">$${Number(payment.returns || 0).toLocaleString()}</p>
+                                  <p style="margin:8px 0 0;color:#A72703;font-size:22px;font-weight:800;">$${Number(computed.returns || 0).toLocaleString()}</p>
                                 </div>
                               </td>
                               <td style="width:50%;padding:10px;">
@@ -114,7 +162,7 @@ export const getUserDashboardData = async (req, res) => {
                             <p style="margin:0 0 8px;color:#0f172a;font-size:15px;font-weight:700;">Investment Summary</p>
                             <p style="margin:0;color:#475569;font-size:14px;line-height:1.8;">
                               Profit rule: <strong>30% every 2 days</strong><br/>
-                              Profit cycles: <strong>${payment.twoDayCycles || 0}</strong><br/>
+                              Profit cycles: <strong>${computed.twoDayCycles || 0}</strong><br/>
                               Total duration: <strong>${payment.durationDays || 0} days</strong><br/>
                               Completed on: <strong>${new Date().toLocaleString()}</strong>
                             </p>
@@ -126,10 +174,6 @@ export const getUserDashboardData = async (req, res) => {
                               View Dashboard
                             </a>
                           </div>
-
-                          <p style="margin:0;color:#64748b;font-size:13px;line-height:1.6;">
-                            Thank you for investing with Innovation SpaceX Trading.
-                          </p>
                         </td>
                       </tr>
 
@@ -153,23 +197,24 @@ export const getUserDashboardData = async (req, res) => {
       }
     }
 
+    const walletData = await recalculateWalletBalance(userId);
+
     const user = await User.findById(userId).select(
       "walletBalance firstName lastName email"
     );
 
-    const deposits = await Deposit.find({ user: userId });
-    const withdrawals = await Withdrawal.find({ user: userId });
+    user.walletBalance = walletData.walletBalance;
+    await user.save();
+
     const payments = await Payment.find({ user: userId }).sort({
       createdAt: -1,
     });
 
-    const totalDeposits = deposits
-      .filter((d) => d.status === "approved")
-      .reduce((sum, d) => sum + (d.amount || 0), 0);
+    const deposits = walletData.deposits;
+    const withdrawals = walletData.withdrawals;
 
-    const totalWithdrawals = withdrawals
-      .filter((w) => w.status === "approved")
-      .reduce((sum, w) => sum + (w.amount || 0), 0);
+    const totalDeposits = walletData.totalDeposits;
+    const totalWithdrawals = walletData.totalWithdrawals;
 
     const pendingInvestments = payments.filter(
       (p) => p.status === "pending"
@@ -184,19 +229,19 @@ export const getUserDashboardData = async (req, res) => {
     ).length;
 
     const totalInvested = payments.reduce(
-      (sum, p) => sum + (p.amount || 0),
+      (sum, p) => sum + Number(p.amount || 0),
       0
     );
 
-    const totalReturns = payments.reduce(
-      (sum, p) => sum + (p.returns || 0),
-      0
-    );
+    const totalReturns = payments.reduce((sum, p) => {
+      const computed = getComputedPaymentValues(p);
+      return sum + Number(computed.returns || 0);
+    }, 0);
 
-    const totalProfit = payments.reduce(
-      (sum, p) => sum + (p.profit || 0),
-      0
-    );
+    const totalProfit = payments.reduce((sum, p) => {
+      const computed = getComputedPaymentValues(p);
+      return sum + Number(computed.profit || 0);
+    }, 0);
 
     const nowMs = Date.now();
 
@@ -210,6 +255,8 @@ export const getUserDashboardData = async (req, res) => {
         );
       }
 
+      const computed = getComputedPaymentValues(p);
+
       return {
         _id: p._id,
         symbol: p.symbol,
@@ -220,12 +267,12 @@ export const getUserDashboardData = async (req, res) => {
         receiptImage: p.receiptImage,
         approvedAt: p.approvedAt,
         completedAt: p.completedAt,
-        returns: p.returns,
-        profit: p.profit,
+        returns: computed.returns,
+        profit: computed.profit,
         durationValue: p.durationValue,
         durationUnit: p.durationUnit,
         durationDays: p.durationDays,
-        twoDayCycles: p.twoDayCycles,
+        twoDayCycles: computed.twoDayCycles,
         createdAt: p.createdAt,
         timeLeft,
       };

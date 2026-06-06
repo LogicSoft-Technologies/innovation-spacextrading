@@ -1,7 +1,17 @@
 // pages/AdminDashboard.jsx
-import React, { useState, useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Users, Settings, LogOut, User, Menu } from "lucide-react";
+import {
+  LayoutDashboard,
+  Users,
+  Settings,
+  LogOut,
+  User,
+  Menu,
+  X,
+  ShieldCheck,
+  ChevronRight,
+} from "lucide-react";
 import { adminGetProfile } from "../Services/adminAuthServices";
 
 const AdminDashboard = ({ setRole }) => {
@@ -23,6 +33,7 @@ const AdminDashboard = ({ setRole }) => {
         navigate("/login");
       }
     };
+
     fetchAdmin();
 
     const handleClickOutside = (e) => {
@@ -30,6 +41,7 @@ const AdminDashboard = ({ setRole }) => {
         setOpenProfileCard(false);
       }
     };
+
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [navigate]);
@@ -47,96 +59,118 @@ const AdminDashboard = ({ setRole }) => {
   ];
 
   return (
-    <div className="flex h-screen font-[Inter]">
-      {/* Mobile Hamburger Button */}
-      <div className="fixed top-4 left-4 z-50 md:hidden">
-        <button
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="p-2 rounded-md bg-gray-800 text-white hover:bg-gray-700 transition"
-        >
-          <Menu className="w-6 h-6" />
-        </button>
-      </div>
+    <div className="flex h-screen bg-[#f6f7f9] font-[Inter]">
+      <button
+        onClick={() => setSidebarOpen(!sidebarOpen)}
+        className="fixed left-4 top-4 z-50 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-900 shadow-sm md:hidden"
+      >
+        {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+      </button>
 
-      {/* Sidebar */}
+      {sidebarOpen && (
+        <div
+          onClick={() => setSidebarOpen(false)}
+          className="fixed inset-0 z-30 bg-slate-950/50 backdrop-blur-sm md:hidden"
+        />
+      )}
+
       <aside
-        className={`fixed top-0 left-0 h-full w-64 bg-gradient-to-b from-black to-[#A72703] text-white flex flex-col justify-between z-40 transform transition-transform duration-300
-        ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0`}
+        className={`fixed left-0 top-0 z-40 flex h-full w-72 flex-col justify-between border-r border-slate-800 bg-slate-950 text-white shadow-2xl transition-transform duration-300 md:translate-x-0 ${
+          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
       >
         <div>
-          {/* Admin Info */}
-          <div
-            className="flex items-center gap-3 px-6 py-6 border-b border-gray-700 cursor-pointer relative"
-            onClick={() => setOpenProfileCard(!openProfileCard)}
-          >
-            {admin?.profilePhoto ? (
-              <img
-                src={admin.profilePhoto}
-                alt="Admin"
-                className="w-12 h-12 rounded-full object-cover border-2 border-white shadow-md"
-              />
-            ) : (
-              <User className="w-12 h-12 text-white opacity-80" />
-            )}
-            <div>
-              <p className="text-sm text-gray-300">Welcome,</p>
-              <p className="font-semibold text-lg">
-                {admin ? `${admin.firstName} ${admin.lastName}` : "Admin"}
-              </p>
+          <div className="border-b border-white/10 p-5">
+            <div className="mb-6 flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#A72703]">
+                <ShieldCheck className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold">Innovation SpaceX</p>
+                <p className="text-xs text-slate-400">Admin Console</p>
+              </div>
             </div>
 
-            {openProfileCard && (
-              <div
-                ref={profileCardRef}
-                className="absolute top-20 left-6 w-64 bg-white rounded-xl text-gray-600 shadow-lg p-4 z-50"
-              >
-                <p className="font-semibold text-center">Admin Profile</p>
-                <p className="mt-2 text-sm">{admin?.email}</p>
+            <button
+              type="button"
+              onClick={() => setOpenProfileCard(!openProfileCard)}
+              className="relative flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-3 text-left hover:bg-white/10"
+            >
+              {admin?.profilePhoto ? (
+                <img
+                  src={admin.profilePhoto}
+                  alt="Admin"
+                  className="h-12 w-12 rounded-xl border border-white/20 object-cover"
+                />
+              ) : (
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/10">
+                  <User className="h-6 w-6 text-white" />
+                </div>
+              )}
+
+              <div className="min-w-0">
+                <p className="text-xs text-slate-400">Signed in as</p>
+                <p className="truncate text-sm font-semibold">
+                  {admin ? `${admin.firstName} ${admin.lastName}` : "Admin"}
+                </p>
               </div>
-            )}
+
+              {openProfileCard && (
+                <div
+                  ref={profileCardRef}
+                  className="absolute left-4 top-20 z-50 w-64 rounded-2xl border border-slate-200 bg-white p-4 text-slate-700 shadow-xl"
+                >
+                  <p className="font-semibold text-slate-950">Admin Profile</p>
+                  <p className="mt-1 break-all text-sm text-slate-500">
+                    {admin?.email}
+                  </p>
+                </div>
+              )}
+            </button>
           </div>
 
-          {/* Menu */}
-          <nav className="mt-10 space-y-4 px-4">
-            {sidebarItems.map((item, index) => {
+          <nav className="space-y-2 p-4">
+            {sidebarItems.map((item) => {
               const isActive = location.pathname === item.path;
+
               return (
                 <Link
-                  key={index}
+                  key={item.path}
                   to={item.path}
-                  className={`flex items-center gap-3 py-3 px-4 rounded-xl transition-all ${
-                    isActive ? "bg-white/20" : "hover:bg-white/10"
+                  onClick={() => setSidebarOpen(false)}
+                  className={`group flex items-center justify-between rounded-2xl px-4 py-3 text-sm font-semibold transition ${
+                    isActive
+                      ? "bg-[#A72703] text-white shadow-lg shadow-[#A72703]/20"
+                      : "text-slate-300 hover:bg-white/10 hover:text-white"
                   }`}
-                  onClick={() => setSidebarOpen(false)} // Close sidebar on mobile
                 >
-                  <item.icon className="w-5 h-5" />
-                  <span className="text-sm font-medium">{item.name}</span>
+                  <span className="flex items-center gap-3">
+                    <item.icon className="h-5 w-5" />
+                    {item.name}
+                  </span>
+                  <ChevronRight
+                    className={`h-4 w-4 transition ${
+                      isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                    }`}
+                  />
                 </Link>
               );
             })}
           </nav>
         </div>
 
-        {/* Logout */}
-        <div
-          onClick={handleLogout}
-          className="p-4 border-t border-gray-700 flex items-center gap-3 hover:bg-white/10 transition-all cursor-pointer"
-        >
-          <LogOut className="w-5 h-5" />
-          <span className="text-sm font-medium">Logout</span>
+        <div className="border-t border-white/10 p-4">
+          <button
+            onClick={handleLogout}
+            className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-300 hover:bg-white/10 hover:text-white"
+          >
+            <LogOut className="h-5 w-5" />
+            Logout
+          </button>
         </div>
       </aside>
 
-      {/* Overlay for mobile */}
-      {sidebarOpen && (
-        <div
-          onClick={() => setSidebarOpen(false)}
-          className="fixed inset-0 bg-black/30 z-30 md:hidden"
-        />
-      )}
-
-      {/* Main Content */}
-      <main className="flex-1 h-screen overflow-y-auto p-6 bg-gray-50 ml-0 md:ml-64 transition-all duration-300">
+      <main className="h-screen flex-1 overflow-y-auto bg-[#f6f7f9] p-4 pt-16 transition-all md:ml-72 md:p-6">
         <Outlet />
       </main>
     </div>
