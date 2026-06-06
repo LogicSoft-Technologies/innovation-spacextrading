@@ -1,8 +1,41 @@
-import React, { useState, useEffect } from "react";
-import { X, CheckCircle, Copy, Loader } from "lucide-react";
-import api from "../../config/api";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  X,
+  CheckCircle,
+  Copy,
+  Loader,
+  Receipt,
+  ShieldCheck,
+  CalendarDays,
+  TrendingUp,
+} from "lucide-react";
+import {
+  getAdminPaymentMethods,
+  userCreateInvestment,
+} from "../Services/authServices";
 
-const InvestmentModal = ({ onClose, amount, market, lastPrice }) => {
+const cryptoMarkets = [
+  "bitcoin",
+  "ethereum",
+  "solana",
+  "dogecoin",
+  "binancecoin",
+  "cardano",
+  "ripple",
+];
+
+const InvestmentModal = ({
+  onClose,
+  amount,
+  market,
+  lastPrice,
+  durationValue,
+  durationUnit,
+  durationDays,
+  profit,
+  totalAmount,
+  twoDayCycles,
+}) => {
   const [paymentMethods, setPaymentMethods] = useState([]);
   const [selectedMethod, setSelectedMethod] = useState("");
   const [receipt, setReceipt] = useState(null);
@@ -10,42 +43,50 @@ const InvestmentModal = ({ onClose, amount, market, lastPrice }) => {
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState("");
-  const [cryptoAmount, setCryptoAmount] = useState(0);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    const load = async () => {
+    const loadPaymentMethods = async () => {
       try {
-        const res = await api.get("/api/admin/payment-methods");
-        setPaymentMethods(res.data?.paymentMethods || res.data || []);
+        const methods = await getAdminPaymentMethods();
+        setPaymentMethods(methods);
       } catch (err) {
         console.error("Failed to load payment methods:", err);
       }
     };
-    load();
+
+    loadPaymentMethods();
   }, []);
 
-  const unitsPurchased =
-    lastPrice && amount ? (Number(amount) / Number(lastPrice)).toFixed(6) : "—";
+  const investmentType = cryptoMarkets.includes(market?.toLowerCase())
+    ? "crypto"
+    : "stock";
 
-  useEffect(() => {
-    if (selectedMethod?.toLowerCase().includes("crypto") && lastPrice) {
-      setCryptoAmount((Number(amount) / Number(lastPrice)).toFixed(6));
-    } else {
-      setCryptoAmount(0);
-    }
-  }, [selectedMethod, amount, lastPrice]);
+  const methodDetails = paymentMethods.find(
+    (m) => m.name === selectedMethod
+  )?.details;
 
-  const handleCopy = (text) => {
-    navigator.clipboard.writeText(text);
-    setToast("Copied to clipboard!");
+  const unitsPurchased = useMemo(() => {
+    if (!lastPrice || !amount) return null;
+    return Number(amount) / Number(lastPrice);
+  }, [amount, lastPrice]);
+
+  const handleCopy = async (text) => {
+    await navigator.clipboard.writeText(text);
+    setToast("Copied to clipboard");
     setTimeout(() => setToast(""), 2000);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     if (!amount || !selectedMethod || !receipt || !confirmed) {
-      setError("Please fill all required fields and confirm payment.");
+      setError("Please select a payment method, upload receipt, and confirm payment.");
+      return;
+    }
+
+    if (!durationValue || !durationUnit) {
+      setError("Investment duration is missing. Please close and select a duration.");
       return;
     }
 
@@ -53,27 +94,18 @@ const InvestmentModal = ({ onClose, amount, market, lastPrice }) => {
     setError("");
 
     try {
-      const investmentType = ["btc", "eth", "crypto"].includes(
-        market?.toLowerCase()
-      )
-        ? "crypto"
-        : "stock";
-
       const formData = new FormData();
+
       formData.append("investmentType", investmentType);
       formData.append("symbol", market?.toUpperCase() || "");
       formData.append("amount", amount);
       formData.append("paymentMethod", selectedMethod);
       formData.append("receiptImage", receipt);
+      formData.append("durationValue", durationValue);
+      formData.append("durationUnit", durationUnit);
 
-      const res = await api.post("/api/payments", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-          Authorization: `Bearer ${localStorage.getItem("userToken")}`,
-        },
-      });
-
-      if (res.status === 201) setSubmitted(true);
+      await userCreateInvestment(formData);
+      setSubmitted(true);
     } catch (err) {
       setError(
         err.response?.data?.message ||
@@ -84,62 +116,116 @@ const InvestmentModal = ({ onClose, amount, market, lastPrice }) => {
     }
   };
 
-  const methodDetails = paymentMethods.find((m) => m.name === selectedMethod)?.details;
-
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-900 rounded-2xl max-w-lg w-full p-6 relative">
+    <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="relative w-full max-w-2xl max-h-[92vh] overflow-y-auto rounded-2xl bg-white shadow-2xl border border-slate-200">
         <button
           onClick={onClose}
-          className="absolute top-3 right-3 text-gray-500 hover:text-[#A72703]"
+          className="absolute top-4 right-4 z-10 rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-[#A72703]"
         >
-          <X className="w-6 h-6" />
+          <X className="w-5 h-5" />
         </button>
 
         {toast && (
-          <div className="fixed top-6 right-6 bg-[#A72703] text-white px-4 py-2 rounded-lg shadow-lg animate-fadeInOut z-50">
+          <div className="fixed top-6 right-6 bg-slate-900 text-white px-4 py-2 rounded-lg shadow-lg z-50 text-sm">
             {toast}
           </div>
         )}
 
         {!submitted ? (
-          <>
-            <h2 className="text-2xl font-semibold mb-3 text-[#A72703]">
-              Invest in {market?.toUpperCase()}
-            </h2>
-
-            <p className="text-gray-600 mb-1">
-              Amount: ${Number(amount || 0).toFixed(2)}
-            </p>
-            <p className="text-gray-600 mb-4">
-              Units Purchased: {unitsPurchased} {market?.toUpperCase()}
-            </p>
-
-            {cryptoAmount > 0 && (
-              <p className="text-gray-600 mb-4">
-                {cryptoAmount} {market?.toUpperCase()} to pay
+          <form onSubmit={handleSubmit}>
+            <div className="border-b border-slate-200 px-6 py-5">
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-500 font-semibold">
+                Investment order
               </p>
-            )}
+              <h2 className="mt-1 text-2xl font-semibold text-slate-950">
+                {market?.toUpperCase()} allocation
+              </h2>
+            </div>
 
-            {error && (
-              <div className="mb-4 text-red-600 font-medium bg-red-100 p-2 rounded">
-                {error}
+            <div className="px-6 py-5 space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-xs text-slate-500">Principal</p>
+                  <p className="mt-1 text-lg font-semibold text-slate-950">
+                    ${Number(amount || 0).toLocaleString()}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-xs text-slate-500">Expected Profit</p>
+                  <p className="mt-1 text-lg font-semibold text-green-700">
+                    ${Number(profit || 0).toLocaleString()}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-[#A72703]/20 bg-[#FFF6F2] p-4">
+                  <p className="text-xs text-[#7C1B01]">Final Return</p>
+                  <p className="mt-1 text-lg font-semibold text-[#A72703]">
+                    ${Number(totalAmount || 0).toLocaleString()}
+                  </p>
+                </div>
               </div>
-            )}
 
-            <div className="space-y-4">
+              <div className="rounded-xl border border-slate-200 p-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+                  <div className="flex gap-3">
+                    <CalendarDays className="w-5 h-5 text-[#A72703]" />
+                    <div>
+                      <p className="text-slate-500">Duration</p>
+                      <p className="font-semibold text-slate-900">
+                        {durationValue} {durationUnit}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3">
+                    <TrendingUp className="w-5 h-5 text-green-700" />
+                    <div>
+                      <p className="text-slate-500">Profit Rule</p>
+                      <p className="font-semibold text-slate-900">
+                        30% every 2 days
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3">
+                    <ShieldCheck className="w-5 h-5 text-blue-700" />
+                    <div>
+                      <p className="text-slate-500">Cycles</p>
+                      <p className="font-semibold text-slate-900">
+                        {twoDayCycles || 0} cycles over {durationDays || 0} days
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {unitsPurchased && (
+                  <p className="mt-4 text-xs text-slate-500">
+                    Estimated units: {unitsPurchased.toFixed(6)}{" "}
+                    {market?.toUpperCase()}
+                  </p>
+                )}
+              </div>
+
+              {error && (
+                <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">
+                  {error}
+                </div>
+              )}
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-slate-700 mb-2">
                   Payment Method
                 </label>
                 <select
-                  className="w-full border border-gray-300 rounded-xl px-4 text-gray-700 py-2"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 outline-none focus:border-[#A72703] focus:ring-2 focus:ring-[#A72703]/15"
                   value={selectedMethod}
                   onChange={(e) => setSelectedMethod(e.target.value)}
                 >
-                  <option value="">-- Select Method --</option>
+                  <option value="">Select payment method</option>
                   {paymentMethods.map((m) => (
-                    <option key={m.name} value={m.name}>
+                    <option key={m._id || m.name} value={m.name}>
                       {m.name}
                     </option>
                   ))}
@@ -147,62 +233,84 @@ const InvestmentModal = ({ onClose, amount, market, lastPrice }) => {
               </div>
 
               {selectedMethod && methodDetails && (
-                <div className="p-4 bg-[#FFEFE6] rounded-xl text-[#A72703] flex items-center justify-between gap-3">
-                  <span>
-                    {cryptoAmount > 0
-                      ? `${cryptoAmount} ${market?.toUpperCase()} to pay (Wallet: ${methodDetails})`
-                      : methodDetails}
-                  </span>
-                  <button
-                    onClick={() => handleCopy(methodDetails)}
-                    className="p-2 bg-[#A72703] text-white rounded-lg hover:bg-[#7C1B01]"
-                  >
-                    <Copy className="w-4 h-4" />
-                  </button>
+                <div className="rounded-xl border border-[#A72703]/20 bg-[#FFF6F2] p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-[#7C1B01] font-semibold">
+                        Payment details
+                      </p>
+                      <p className="mt-2 text-sm text-slate-800 break-all">
+                        {methodDetails}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(methodDetails)}
+                      className="rounded-lg bg-[#A72703] p-2 text-white hover:bg-[#7C1B01]"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               )}
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-slate-700 mb-2">
                   Upload Payment Receipt
                 </label>
-                <input
-                  type="file"
-                  accept="image/*,application/pdf"
-                  onChange={(e) => setReceipt(e.target.files[0])}
-                  className="w-full border border-gray-300 rounded-xl px-4 py-2"
-                />
+                <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center hover:border-[#A72703] hover:bg-[#FFF6F2]">
+                  <Receipt className="w-7 h-7 text-slate-500" />
+                  <span className="mt-2 text-sm font-medium text-slate-700">
+                    {receipt ? receipt.name : "Choose receipt image or PDF"}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={(e) => setReceipt(e.target.files[0])}
+                    className="hidden"
+                  />
+                </label>
               </div>
 
-              <label className="flex items-center gap-2 text-sm text-gray-700">
+              <label className="flex items-start gap-3 rounded-xl border border-slate-200 p-4 text-sm text-slate-700">
                 <input
                   type="checkbox"
                   checked={confirmed}
                   onChange={(e) => setConfirmed(e.target.checked)}
+                  className="mt-1"
                 />
-                I confirm I have made this payment
+                <span>
+                  I confirm that I have made this payment and understand this
+                  investment matures after the selected duration.
+                </span>
               </label>
 
               <button
-                onClick={handleSubmit}
+                type="submit"
                 disabled={!confirmed || !receipt || !selectedMethod || loading}
-                className="w-full py-3 rounded-xl bg-[#A72703] text-white font-semibold hover:bg-[#7C1B01] disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full rounded-xl bg-[#A72703] px-5 py-3 font-semibold text-white shadow-lg shadow-[#A72703]/20 hover:bg-[#7C1B01] disabled:bg-slate-400 disabled:shadow-none flex items-center justify-center gap-2"
               >
                 {loading && <Loader className="animate-spin w-5 h-5" />}
-                {loading ? "Processing..." : "I Have Paid"}
+                {loading ? "Submitting investment..." : "Submit Investment"}
               </button>
             </div>
-          </>
+          </form>
         ) : (
-          <div className="flex flex-col items-center justify-center py-16 text-center animate-fadeIn">
-            <CheckCircle className="w-16 h-16 text-green-500 mb-3" />
-            <h3 className="text-xl font-semibold text-[#A72703] mb-2">
-              Congratulations!
+          <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+            <CheckCircle className="w-16 h-16 text-green-600 mb-4" />
+            <h3 className="text-2xl font-semibold text-slate-950">
+              Investment submitted
             </h3>
-            <p className="text-gray-600 max-w-md">
-              Your investment has been submitted successfully. We'll notify you
-              once it's approved.
+            <p className="mt-2 max-w-md text-slate-600">
+              Your investment is pending admin approval. Once approved, the
+              selected duration countdown will begin.
             </p>
+            <button
+              onClick={onClose}
+              className="mt-6 rounded-xl bg-[#A72703] px-6 py-3 text-sm font-semibold text-white hover:bg-[#7C1B01]"
+            >
+              Close
+            </button>
           </div>
         )}
       </div>

@@ -10,6 +10,7 @@ import Deposit from "../models/Deposit.js";
 import Withdrawal from "../models/Withdrawal.js";
 import asyncHandler from "express-async-handler";
 import path from "path";
+import { calculateInvestmentReturns } from "../utils/investmentCalculator.js";
 
 /* ---------------- TOKEN GENERATOR ---------------- */
 const generateToken = (id) => {
@@ -606,48 +607,156 @@ export const adminRejectWithdrawal = asyncHandler(async (req, res) => {
 // ---------------- INVESTMENT APPROVED ----------------
 export const adminApprovePayment = asyncHandler(async (req, res) => {
   const { paymentId } = req.params;
+
   const payment = await Payment.findById(paymentId).populate("user");
-  if (!payment) return res.status(404).json({ message: "Payment not found" });
-  if (payment.status !== "pending") return res.status(400).json({ message: "Already processed" });
+
+  if (!payment) {
+    return res.status(404).json({ message: "Payment not found" });
+  }
+
+  if (payment.status !== "pending") {
+    return res.status(400).json({ message: "Already processed" });
+  }
+
+  if (!payment.durationDays || payment.durationDays <= 0) {
+    return res.status(400).json({
+      message: "Investment duration is missing or invalid",
+    });
+  }
+
+  const { profit, returns, twoDayCycles } = calculateInvestmentReturns(
+    payment.amount,
+    payment.durationDays
+  );
+
+  const approvedAt = new Date();
+  const completedAt = new Date(
+    approvedAt.getTime() + payment.durationDays * 24 * 60 * 60 * 1000
+  );
 
   payment.status = "approved";
-  payment.approvedAt = new Date();
-  payment.completedAt = new Date(Date.now() + 6 * 60 * 60 * 1000); // 6 hours
-  payment.returns = payment.amount * 10;
+  payment.approvedAt = approvedAt;
+  payment.completedAt = completedAt;
+  payment.twoDayCycles = twoDayCycles;
+  payment.profit = profit;
+  payment.returns = returns;
+
   await payment.save();
+
+  const dashboardUrl = `${process.env.FRONTEND_URL || "https://innovationspacextrading.com"}/dashboard`;
 
   await sendEmail({
     to: payment.user.email,
-    subject: "Investment Approved",
-    text: `Hi ${payment.user.firstName}, your investment of $${payment.amount} in ${payment.symbol} has been approved.`,
+    subject: "Your Investment Has Been Approved",
+    text: `Hi ${payment.user.firstName}, your investment of $${payment.amount} in ${payment.symbol} has been approved. Profit rule: 30% every 2 days. Expected profit: $${profit}. Final return: $${returns}.`,
     html: `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Investment Approved</title></head>
-    <body style="margin:0;padding:0;font-family:Arial,sans-serif;background:#f5f5f5;">
-      <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;padding:40px 0;">
-        <tr><td align="center">
-          <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 6px 20px rgba(0,0,0,0.1);">
-            <tr><td style="background:#000000;text-align:center;padding:28px;">
-              <h1 style="color:#ffffff;margin:0;font-size:26px;">Innovation SpaceX Trading</h1>
-            </td></tr>
-            <tr><td style="padding:30px;color:#333;font-size:16px;line-height:1.6;">
-              <p>Hi <b>${payment.user.firstName}</b>,</p>
-              <p>Your investment of <b>$${payment.amount}</b> in <b>${payment.symbol}</b> has been <span style="color:#A72703;font-weight:bold;">approved</span>.</p>
-              <p>Your investment will mature in 6 hours with expected returns of <b>$${payment.returns}</b>.</p>
-              <p>Thank you for investing with Innovation SpaceX Trading.</p>
-            </td></tr>
-            <tr><td style="background:#000000;text-align:center;padding:18px;">
-              <p style="color:#ffffff;font-size:13px;margin:0;">© ${new Date().getFullYear()} Innovation SpaceX Trading. All rights reserved.</p>
-            </td></tr>
-          </table>
-        </td></tr>
-      </table>
-    </body>
-    </html>`
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Investment Approved</title>
+      </head>
+      <body style="margin:0;padding:0;background:#f4f6f8;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f8;padding:36px 12px;">
+          <tr>
+            <td align="center">
+              <table width="100%" cellpadding="0" cellspacing="0" style="max-width:640px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 16px 40px rgba(15,23,42,0.12);">
+                <tr>
+                  <td style="background:#0f172a;padding:28px 32px;">
+                    <p style="margin:0;color:#94a3b8;font-size:12px;letter-spacing:2px;text-transform:uppercase;font-weight:700;">
+                      Investment Approved
+                    </p>
+                    <h1 style="margin:8px 0 0;color:#ffffff;font-size:26px;line-height:1.25;">
+                      Innovation SpaceX Trading
+                    </h1>
+                  </td>
+                </tr>
+
+                <tr>
+                  <td style="padding:32px;">
+                    <p style="margin:0 0 14px;font-size:16px;line-height:1.7;">
+                      Hi <strong>${payment.user.firstName}</strong>,
+                    </p>
+
+                    <p style="margin:0 0 22px;font-size:16px;line-height:1.7;color:#334155;">
+                      Your investment in <strong>${payment.symbol}</strong> has been approved. Your selected duration is now active and your maturity countdown has started.
+                    </p>
+
+                    <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;">
+                      <tr>
+                        <td style="width:50%;padding:10px;">
+                          <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;">
+                            <p style="margin:0;color:#64748b;font-size:12px;text-transform:uppercase;font-weight:700;">Invested Amount</p>
+                            <p style="margin:8px 0 0;color:#0f172a;font-size:22px;font-weight:800;">$${Number(payment.amount).toLocaleString()}</p>
+                          </div>
+                        </td>
+                        <td style="width:50%;padding:10px;">
+                          <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:16px;">
+                            <p style="margin:0;color:#15803d;font-size:12px;text-transform:uppercase;font-weight:700;">Expected Profit</p>
+                            <p style="margin:8px 0 0;color:#15803d;font-size:22px;font-weight:800;">$${Number(profit).toLocaleString()}</p>
+                          </div>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="width:50%;padding:10px;">
+                          <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:16px;">
+                            <p style="margin:0;color:#9a3412;font-size:12px;text-transform:uppercase;font-weight:700;">Final Return</p>
+                            <p style="margin:8px 0 0;color:#A72703;font-size:22px;font-weight:800;">$${Number(returns).toLocaleString()}</p>
+                          </div>
+                        </td>
+                        <td style="width:50%;padding:10px;">
+                          <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:16px;">
+                            <p style="margin:0;color:#1d4ed8;font-size:12px;text-transform:uppercase;font-weight:700;">Duration</p>
+                            <p style="margin:8px 0 0;color:#1e293b;font-size:22px;font-weight:800;">${payment.durationValue} ${payment.durationUnit}</p>
+                          </div>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:18px;margin:0 0 24px;">
+                      <p style="margin:0 0 8px;color:#0f172a;font-size:15px;font-weight:700;">Investment Terms</p>
+                      <p style="margin:0;color:#475569;font-size:14px;line-height:1.8;">
+                        Profit rule: <strong>30% every 2 days</strong><br/>
+                        Profit cycles: <strong>${twoDayCycles}</strong><br/>
+                        Total duration: <strong>${payment.durationDays} days</strong><br/>
+                        Maturity date: <strong>${completedAt.toLocaleString()}</strong>
+                      </p>
+                    </div>
+
+                    <div style="text-align:center;margin:28px 0;">
+                      <a href="${dashboardUrl}"
+                        style="display:inline-block;background:#A72703;color:#ffffff;text-decoration:none;padding:13px 24px;border-radius:10px;font-size:15px;font-weight:700;">
+                        View Dashboard
+                      </a>
+                    </div>
+
+                    <p style="margin:0;color:#64748b;font-size:13px;line-height:1.6;">
+                      Once your investment matures, your wallet will be credited with the final return shown above.
+                    </p>
+                  </td>
+                </tr>
+
+                <tr>
+                  <td style="background:#0f172a;text-align:center;padding:18px;">
+                    <p style="margin:0;color:#cbd5e1;font-size:12px;">
+                      &copy; ${new Date().getFullYear()} Innovation SpaceX Trading. All rights reserved.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+    `,
   });
 
-  res.json({ message: "Investment approved", payment });
+  res.json({
+    message: "Investment approved",
+    payment,
+  });
 });
 
 /* ---------------- GET DASHBOARD DATA ---------------- */

@@ -1,7 +1,6 @@
-// frontend/config/api.js
 import axios from "axios";
 
-const ENV = import.meta.env.VITE_ENV; // "dev" or "prod"
+const ENV = import.meta.env.VITE_ENV;
 const LOCAL_API = import.meta.env.VITE_LOCAL_API;
 const PROD_API = import.meta.env.VITE_PROD_API;
 
@@ -14,12 +13,13 @@ const api = axios.create({
   },
 });
 
-// Attach JWT token if exists
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("userToken");
+
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+
   return config;
 });
 

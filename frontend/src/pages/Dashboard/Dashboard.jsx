@@ -10,6 +10,9 @@ import {
   Car,
   Timer,
   Loader,
+  CalendarDays,
+  CircleDollarSign,
+  Target,
 } from "lucide-react";
 import { Line, Pie } from "react-chartjs-2";
 import {
@@ -34,27 +37,33 @@ ChartJS.register(
   Legend
 );
 
-const iconMap = { SpaceX: Rocket, Tesla: Car, Crypto: Coins };
+const iconMap = {
+  SPACEX: Rocket,
+  TESLA: Car,
+  TSLA: Car,
+  CRYPTO: Coins,
+  BITCOIN: Coins,
+  ETHEREUM: Coins,
+  SOLANA: Coins,
+  DOGECOIN: Coins,
+  BINANCECOIN: Coins,
+  CARDANO: Coins,
+  RIPPLE: Coins,
+};
 
 const Dashboard = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const timersRef = useRef(null);
-  const [selectedInvestment, setSelectedInvestment] = useState(null);
 
-  // Fetch dashboard data
   const fetchDashboard = async () => {
     setLoading(true);
     setError("");
+
     try {
       const res = await userGetDashboardData();
-      const paymentsWithTime = (res.payments || []).map((p) =>
-        p.status === "approved" && p.timeLeft == null
-          ? { ...p, timeLeft: 6 * 60 * 60 }
-          : p
-      );
-      setData({ ...res, payments: paymentsWithTime });
+      setData(res);
     } catch (err) {
       console.error("Failed to fetch dashboard:", err);
       setError(
@@ -68,75 +77,170 @@ const Dashboard = () => {
   useEffect(() => {
     fetchDashboard();
   }, []);
-  useEffect(() => {
-    if (data?.payments?.length && !selectedInvestment) {
-      setSelectedInvestment(data.payments[0]);
-    }
-  }, [data, selectedInvestment]);
 
-  // Countdown for approved investments
   useEffect(() => {
     timersRef.current = setInterval(() => {
       setData((prev) => {
         if (!prev) return prev;
+
         let mustRefetch = false;
+
         const updatedPayments = (prev.payments || []).map((p) => {
           if (p.status === "approved" && typeof p.timeLeft === "number") {
             const newTime = Math.max(0, p.timeLeft - 1);
             if (newTime === 0 && p.timeLeft > 0) mustRefetch = true;
             return { ...p, timeLeft: newTime };
           }
+
           return p;
         });
+
         if (mustRefetch) fetchDashboard();
+
         return { ...prev, payments: updatedPayments };
       });
     }, 1000);
+
     return () => clearInterval(timersRef.current);
   }, []);
 
+  const formatCurrency = (value) =>
+    `$${Number(value || 0).toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
+
+  const getInvestmentComputedValues = (payment) => {
+    const amount = Number(payment.amount || 0);
+    const durationDays = Number(payment.durationDays || 0);
+    const cycles = Math.floor(durationDays / 2);
+
+    const profit =
+      durationDays > 0 ? amount * 0.3 * cycles : Number(payment.profit || 0);
+
+    const finalReturn =
+      durationDays > 0 ? amount + profit : Number(payment.returns || 0);
+
+    return {
+      profit,
+      finalReturn,
+      cycles,
+    };
+  };
+
+  const formatTime = (seconds) => {
+    if (seconds == null) return "--";
+    if (seconds <= 0) return "Completed";
+
+    const d = Math.floor(seconds / 86400);
+    const h = String(Math.floor((seconds % 86400) / 3600)).padStart(2, "0");
+    const m = String(Math.floor((seconds % 3600) / 60)).padStart(2, "0");
+    const s = String(seconds % 60).padStart(2, "0");
+
+    return d > 0 ? `${d}d ${h}:${m}:${s}` : `${h}:${m}:${s}`;
+  };
+
   const metrics = useMemo(() => {
     if (!data) return [];
+
     return [
       {
         title: "Wallet Balance",
-        value: `$${(data.walletBalance || 0).toLocaleString()}`,
+        value: formatCurrency(data.walletBalance),
         icon: Wallet,
         color: "#A72703",
       },
       {
         title: "Total Deposits",
-        value: `$${(data.totalDeposits || 0).toLocaleString()}`,
+        value: formatCurrency(data.totalDeposits),
         icon: ArrowDownCircle,
         color: "#1D4ED8",
       },
       {
         title: "Total Withdrawals",
-        value: `$${(data.totalWithdrawals || 0).toLocaleString()}`,
+        value: formatCurrency(data.totalWithdrawals),
         icon: ArrowUpCircle,
         color: "#EAB308",
       },
       {
-        title: "Pending Investments",
-        value: `${data.pendingInvestments || 0}`,
+        title: "Active Investments",
+        value: `${data.activeInvestments || 0}`,
         icon: TrendingUp,
         color: "#16A34A",
       },
     ];
   }, [data]);
 
+  const computedPortfolio = useMemo(() => {
+    const payments = data?.payments || [];
+
+    return payments.reduce(
+      (acc, payment) => {
+        const computed = getInvestmentComputedValues(payment);
+
+        acc.totalInvested += Number(payment.amount || 0);
+        acc.totalProfit += computed.profit;
+        acc.totalProjectedReturns += computed.finalReturn;
+
+        if (payment.status === "completed") {
+          acc.completedReturns += computed.finalReturn;
+        }
+
+        return acc;
+      },
+      {
+        totalInvested: 0,
+        totalProfit: 0,
+        totalProjectedReturns: 0,
+        completedReturns: 0,
+      }
+    );
+  }, [data]);
+
+  const investmentStats = useMemo(() => {
+    if (!data) return [];
+
+    return [
+      {
+        label: "Total Invested",
+        value: formatCurrency(computedPortfolio.totalInvested),
+        icon: CircleDollarSign,
+      },
+      {
+        label: "Projected Returns",
+        value: formatCurrency(computedPortfolio.totalProjectedReturns),
+        icon: Target,
+      },
+      {
+        label: "Pending",
+        value: data.pendingInvestments || 0,
+        icon: Timer,
+      },
+      {
+        label: "Completed",
+        value: data.completedInvestments || 0,
+        icon: CalendarDays,
+      },
+    ];
+  }, [data, computedPortfolio]);
+
   const investmentsAgg = useMemo(() => {
     if (!data) return [];
+
     const map = {};
+
     (data.payments || []).forEach((p) => {
-      if (!map[p.symbol]) map[p.symbol] = 0;
-      map[p.symbol] += p.amount || 0;
+      const key = p.symbol || "Unknown";
+      if (!map[key]) map[key] = 0;
+      map[key] += p.amount || 0;
     });
+
     return Object.keys(map).map((k) => ({ name: k, value: map[k] }));
   }, [data]);
 
   const lineChartData = useMemo(() => {
     if (!data) return { labels: [], datasets: [] };
+
     const monthNames = [
       "Jan",
       "Feb",
@@ -151,19 +255,36 @@ const Dashboard = () => {
       "Nov",
       "Dec",
     ];
-    const monthlyTotals = Array(12).fill(0);
+
+    const monthlyInvested = Array(12).fill(0);
+    const monthlyProfit = Array(12).fill(0);
+
     (data.payments || []).forEach((p) => {
       const date = new Date(p.createdAt);
-      if (!isNaN(date)) monthlyTotals[date.getMonth()] += p.amount || 0;
+      if (!isNaN(date)) {
+        const computed = getInvestmentComputedValues(p);
+        monthlyInvested[date.getMonth()] += p.amount || 0;
+        monthlyProfit[date.getMonth()] += computed.profit;
+      }
     });
+
     return {
       labels: monthNames,
       datasets: [
         {
-          label: "Portfolio Snapshot",
-          data: monthlyTotals,
+          label: "Invested",
+          data: monthlyInvested,
           borderColor: "#A72703",
-          backgroundColor: "rgba(167,39,3,0.1)",
+          backgroundColor: "rgba(167,39,3,0.08)",
+          tension: 0.35,
+          pointRadius: 3,
+          fill: true,
+        },
+        {
+          label: "Projected Profit",
+          data: monthlyProfit,
+          borderColor: "#16A34A",
+          backgroundColor: "rgba(22,163,74,0.08)",
           tension: 0.35,
           pointRadius: 3,
           fill: true,
@@ -172,53 +293,58 @@ const Dashboard = () => {
     };
   }, [data]);
 
-  const formatTime = (seconds) => {
-    if (seconds == null) return "--:--:--";
-    const h = String(Math.floor(seconds / 3600)).padStart(2, "0");
-    const m = String(Math.floor((seconds % 3600) / 60)).padStart(2, "0");
-    const s = String(seconds % 60).padStart(2, "0");
-    return `${h}:${m}:${s}`;
+  const getStatusStyle = (status) => {
+    if (status === "completed") return "bg-green-100 text-green-700";
+    if (status === "approved") return "bg-blue-100 text-blue-700";
+    if (status === "pending") return "bg-yellow-100 text-yellow-700";
+    return "bg-gray-100 text-gray-700";
   };
 
-  if (loading)
+  if (loading) {
     return (
       <div className="flex justify-center py-20">
         <Loader className="animate-spin w-10 h-10 text-gray-500" />
       </div>
     );
-  if (error)
+  }
+
+  if (error) {
     return (
       <div className="text-red-500 text-center py-10 text-lg font-medium">
         {error}
       </div>
     );
+  }
 
   return (
-    <div className="p-6 md:p-8 font-[Inter] space-y-10 bg-[#f9fafb] min-h-screen">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-xl md:text-2xl font-semibold text-gray-800">
-            Portfolio Overview
-          </h2>
-          <p className="text-gray-500 text-sm">
-            Track your investments, deposits, and withdrawals.
-          </p>
-        </div>
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2 text-gray-800 font-medium">
-            <Timer className="w-5 h-5 text-blue-600" />
-            <span className="text-sm">Live updates</span>
+    <div className="p-5 md:p-8 font-[Inter] space-y-8 bg-[#f6f7f9] min-h-screen">
+      <div className="rounded-2xl bg-slate-950 text-white border border-slate-800 p-6 shadow-xl">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-400 font-semibold">
+              Portfolio command center
+            </p>
+            <h2 className="mt-2 text-2xl md:text-3xl font-semibold">
+              Portfolio Overview
+            </h2>
+            <p className="mt-2 text-sm text-slate-400">
+              Monitor wallet activity, investment maturity, projected profit,
+              and completed returns.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900 px-4 py-3">
+            <Timer className="w-5 h-5 text-green-400" />
+            <span className="text-sm font-medium">30% every 2 days</span>
           </div>
         </div>
       </div>
 
-      {/* Metrics */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        {metrics.map((m, i) => (
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        {metrics.map((m) => (
           <div
-            key={i}
-            className="bg-white flex items-center gap-4 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 border border-gray-100"
+            key={m.title}
+            className="bg-white flex items-center gap-4 p-5 rounded-2xl shadow-sm border border-slate-200"
           >
             <div
               className="p-3 rounded-xl"
@@ -227,30 +353,43 @@ const Dashboard = () => {
               <m.icon className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-gray-500 text-xs uppercase tracking-wide">
+              <p className="text-slate-500 text-xs uppercase tracking-wide">
                 {m.title}
               </p>
-              <p className="text-gray-800 font-semibold text-lg">{m.value}</p>
+              <p className="text-slate-900 font-semibold text-lg">{m.value}</p>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-        {/* Portfolio Allocation Card */}
-        <div className="xl:col-span-1 bg-white p-6 rounded-2xl shadow-lg border border-gray-100 flex flex-col transition-all hover:shadow-xl">
-          {/* Header */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        {investmentStats.map((item) => (
+          <div
+            key={item.label}
+            className="bg-white rounded-2xl border border-slate-200 p-5 flex items-center justify-between"
+          >
+            <div>
+              <p className="text-sm text-slate-500">{item.label}</p>
+              <p className="mt-1 text-xl font-semibold text-slate-950">
+                {item.value}
+              </p>
+            </div>
+            <item.icon className="w-6 h-6 text-[#A72703]" />
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
           <div className="flex justify-between items-center mb-4">
-            <h3 className="font-semibold text-gray-800 text-sm tracking-wide uppercase">
+            <h3 className="font-semibold text-slate-900 text-sm uppercase tracking-wide">
               Portfolio Allocation
             </h3>
-            <span className="text-gray-400 text-xs font-medium">By Symbol</span>
+            <span className="text-slate-400 text-xs">By Symbol</span>
           </div>
 
-          {/* Chart */}
-          <div className="flex flex-col items-center justify-center">
-            <div className="relative w-[200px] sm:w-[240px] md:w-[260px] mb-6 mt-4">
+          <div className="flex justify-center">
+            <div className="w-[230px] sm:w-[270px]">
               <Pie
                 data={{
                   labels: investmentsAgg.map((i) => i.name),
@@ -267,88 +406,36 @@ const Dashboard = () => {
                       ].slice(0, investmentsAgg.length),
                       borderWidth: 2,
                       borderColor: "#ffffff",
-                      hoverOffset: 14,
                     },
                   ],
                 }}
                 options={{
-                  cutout: "45%",
                   responsive: true,
                   plugins: {
                     legend: {
-                      display: true,
                       position: "bottom",
-                      labels: {
-                        padding: 12,
-                        boxWidth: 18,
-                        font: { size: 12, weight: "500" },
-                        generateLabels: (chart) =>
-                          chart.data.labels.map((label, i) => {
-                            const value = chart.data.datasets[0].data[i];
-                            const total = chart.data.datasets[0].data.reduce(
-                              (a, b) => a + b,
-                              0
-                            );
-                            const percent = ((value / total) * 100).toFixed(1);
-                            return {
-                              text: `${label}: $${value.toLocaleString()} (${percent}%)`,
-                              fillStyle:
-                                chart.data.datasets[0].backgroundColor[i],
-                              strokeStyle: "#ffffff",
-                              lineWidth: 2,
-                              hidden: false,
-                              index: i,
-                            };
-                          }),
-                      },
-                    },
-                    tooltip: {
-                      padding: 8,
-                      bodyFont: { size: 13, weight: "500" },
-                      callbacks: {
-                        label: (tooltipItem) => {
-                          const value = tooltipItem.raw;
-                          const total = tooltipItem.dataset.data.reduce(
-                            (a, b) => a + b,
-                            0
-                          );
-                          const percent = ((value / total) * 100).toFixed(1);
-                          return `${
-                            tooltipItem.label
-                          }: $${value.toLocaleString()} (${percent}%)`;
-                        },
-                      },
+                      labels: { boxWidth: 14, padding: 12 },
                     },
                   },
                 }}
               />
             </div>
           </div>
-
-          {/* Total Invested at Bottom */}
-          <div className="mt-4 text-center bg-gray-50 rounded-xl py-3 border border-gray-100">
-            <span className="text-gray-500 text-xs font-medium tracking-wide block">
-              Total Invested
-            </span>
-            <span className="text-gray-900 font-bold text-lg sm:text-xl">
-              ${data.totalInvested?.toLocaleString() || 0}
-            </span>
-          </div>
         </div>
 
-        {/* Line Chart */}
-        <div className="xl:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+        <div className="xl:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
           <div className="flex justify-between items-center mb-4">
-            <h3 className="font-semibold text-gray-800 text-sm">
-              Portfolio Trend
+            <h3 className="font-semibold text-slate-900 text-sm uppercase tracking-wide">
+              Investment Trend
             </h3>
-            <span className="text-gray-500 text-xs">Snapshot</span>
+            <span className="text-slate-500 text-xs">Invested vs profit</span>
           </div>
+
           <Line
             data={lineChartData}
             options={{
               responsive: true,
-              plugins: { legend: { display: false } },
+              plugins: { legend: { display: true, position: "bottom" } },
               scales: {
                 y: {
                   beginAtZero: true,
@@ -360,64 +447,110 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Active Investments */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-        <h3 className="font-semibold text-gray-800 mb-4 text-sm">
-          Your Investments
-        </h3>
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+        <div className="flex items-center justify-between gap-4 mb-5">
+          <div>
+            <h3 className="font-semibold text-slate-900">Your Investments</h3>
+            <p className="text-sm text-slate-500">
+              Duration, projected profit, maturity status, and wallet return.
+            </p>
+          </div>
+        </div>
+
         {(data.payments || []).length === 0 ? (
-          <p className="text-gray-500 text-sm">You have no investments yet.</p>
+          <p className="text-slate-500 text-sm">You have no investments yet.</p>
         ) : (
           <div className="grid gap-3">
             {data.payments.map((p) => {
-              const Icon = iconMap[p.symbol] || Wallet;
+              const symbolKey = String(p.symbol || "").toUpperCase();
+              const Icon = iconMap[symbolKey] || Wallet;
+              const computed = getInvestmentComputedValues(p);
+
               return (
                 <div
                   key={p._id}
-                  className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition"
+                  className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-white shadow-sm">
-                      <Icon className="w-5 h-5 text-gray-700" />
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 rounded-xl bg-white shadow-sm">
+                      <Icon className="w-5 h-5 text-slate-700" />
                     </div>
+
                     <div>
-                      <p className="text-gray-700 font-medium">
-                        {p.symbol}{" "}
-                        <span className="text-xs text-gray-500 ml-2">
-                          ({p.investmentType})
+                      <p className="text-slate-800 font-semibold">
+                        {p.symbol}
+                        <span className="text-xs text-slate-500 ml-2">
+                          {p.investmentType}
                         </span>
                       </p>
-                      <p className="text-sm text-gray-500">
-                        Amount: ${p.amount?.toLocaleString()}
-                      </p>
+
+                      <div className="mt-2 grid grid-cols-2 md:grid-cols-5 gap-3 text-xs">
+                        <div>
+                          <p className="text-slate-500">Principal</p>
+                          <p className="font-semibold text-slate-900">
+                            {formatCurrency(p.amount)}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-slate-500">Profit</p>
+                          <p className="font-semibold text-green-700">
+                            {formatCurrency(computed.profit)}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-slate-500">Final Return</p>
+                          <p className="font-semibold text-[#A72703]">
+                            {formatCurrency(computed.finalReturn)}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-slate-500">Duration</p>
+                          <p className="font-semibold text-slate-900">
+                            {p.durationValue && p.durationUnit
+                              ? `${p.durationValue} ${p.durationUnit}`
+                              : p.durationDays
+                              ? `${p.durationDays} days`
+                              : "--"}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-slate-500">Rule</p>
+                          <p className="font-semibold text-slate-900">
+                            30% / 2 days
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p
-                      className={`text-sm font-semibold ${
-                        p.status === "completed"
-                          ? "text-green-600"
-                          : p.status === "pending"
-                          ? "text-yellow-600"
-                          : "text-gray-800"
-                      }`}
+
+                  <div className="lg:text-right flex lg:block items-center justify-between gap-3">
+                    <span
+                      className={`inline-block px-3 py-1 text-xs font-semibold rounded-full ${getStatusStyle(
+                        p.status
+                      )}`}
                     >
-                      {p.status.toUpperCase()}
-                    </p>
+                      {p.status?.toUpperCase()}
+                    </span>
+
                     {p.status === "approved" &&
                       typeof p.timeLeft === "number" && (
-                        <p className="text-xs text-gray-500 mt-1">
-                          Matures in:{" "}
-                          <span className="font-mono">
+                        <p className="text-xs text-slate-500 mt-2">
+                          Matures in{" "}
+                          <span className="font-mono font-semibold text-slate-900">
                             {formatTime(p.timeLeft)}
                           </span>
                         </p>
                       )}
+
                     {p.status === "completed" && (
-                      <p className="text-xs text-gray-500 mt-1">
-                        Completed on:{" "}
+                      <p className="text-xs text-slate-500 mt-2">
+                        Completed{" "}
                         {p.completedAt
-                          ? new Date(p.completedAt).toLocaleString()
+                          ? new Date(p.completedAt).toLocaleDateString()
                           : "--"}
                       </p>
                     )}
@@ -429,19 +562,18 @@ const Dashboard = () => {
         )}
       </div>
 
-      {/* Recent Transactions */}
-      <div className="bg-white rounded-2xl shadow-lg p-6 overflow-x-auto">
-        <h3 className="font-semibold text-gray-800 mb-4 text-sm tracking-wide uppercase">
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 overflow-x-auto">
+        <h3 className="font-semibold text-slate-900 mb-4 text-sm uppercase tracking-wide">
           Recent Transactions
         </h3>
 
-        <table className="w-full text-sm border-separate border-spacing-y-2 table-fixed">
+        <table className="w-full text-sm border-separate border-spacing-y-2 min-w-[720px]">
           <thead>
-            <tr className="text-gray-500 text-xs uppercase tracking-wide">
-              <th className="w-1/4 py-2 px-3 text-left">Type</th>
-              <th className="w-1/4 py-2 px-3 text-right">Amount</th>
-              <th className="w-1/4 py-2 px-3 text-right">Status</th>
-              <th className="w-1/4 py-2 px-3 text-right">Date</th>
+            <tr className="text-slate-500 text-xs uppercase tracking-wide">
+              <th className="py-2 px-3 text-left">Type</th>
+              <th className="py-2 px-3 text-right">Amount</th>
+              <th className="py-2 px-3 text-right">Status</th>
+              <th className="py-2 px-3 text-right">Date</th>
             </tr>
           </thead>
           <tbody>
@@ -468,30 +600,23 @@ const Dashboard = () => {
               .sort((a, b) => new Date(b.date) - new Date(a.date))
               .slice(0, 15)
               .map((t, i) => (
-                <tr
-                  key={i}
-                  className="transition-all hover:shadow-sm bg-gray-50 hover:bg-white rounded-xl"
-                >
-                  <td className="py-3 px-3 font-medium text-gray-700 text-left">
+                <tr key={i} className="bg-slate-50">
+                  <td className="py-3 px-3 font-medium text-slate-700 text-left rounded-l-xl">
                     {t.type}
                   </td>
-                  <td className="py-3 px-3 text-gray-800 font-semibold text-right">
-                    ${(t.amount || 0).toLocaleString()}
+                  <td className="py-3 px-3 text-slate-900 font-semibold text-right">
+                    {formatCurrency(t.amount)}
                   </td>
                   <td className="py-3 px-3 text-right">
                     <span
-                      className={`inline-block px-3 py-1 text-xs font-medium rounded-full ${
-                        t.status === "completed"
-                          ? "bg-green-100 text-green-700"
-                          : t.status === "approved"
-                          ? "bg-blue-100 text-blue-700"
-                          : "bg-yellow-100 text-yellow-700"
-                      }`}
+                      className={`inline-block px-3 py-1 text-xs font-medium rounded-full ${getStatusStyle(
+                        t.status
+                      )}`}
                     >
-                      {t.status.charAt(0).toUpperCase() + t.status.slice(1)}
+                      {t.status?.charAt(0).toUpperCase() + t.status?.slice(1)}
                     </span>
                   </td>
-                  <td className="py-3 px-3 text-gray-500 text-sm text-right">
+                  <td className="py-3 px-3 text-slate-500 text-sm text-right rounded-r-xl">
                     {t.date ? new Date(t.date).toLocaleDateString() : "--"}
                   </td>
                 </tr>

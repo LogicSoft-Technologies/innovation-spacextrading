@@ -44,9 +44,7 @@ const Users = () => {
     if (status === "rejected") color = "bg-red-100 text-red-800";
     if (status === "pending") color = "bg-yellow-100 text-yellow-800";
     return (
-      <span
-        className={`px-2 py-1 rounded-full text-xs font-semibold ${color}`}
-      >
+      <span className={`px-2 py-1 rounded-full text-xs font-semibold ${color}`}>
         {status.toUpperCase()}
       </span>
     );
@@ -146,26 +144,67 @@ const Users = () => {
             {/* Withdrawals */}
             <div className="bg-white shadow-sm rounded-lg p-4">
               <h3 className="font-semibold text-gray-600 mb-3">Withdrawals</h3>
-              {selectedUser.pendingWithdrawals?.length ? (
-                selectedUser.pendingWithdrawals.map((w) => (
-                  <div
-                    key={w._id}
-                    className="flex flex-col md:flex-row justify-between items-start md:items-center py-2 border-b last:border-b-0 gap-2"
-                  >
-                    <div>
-                      <p className="text-gray-700">${w.amount}</p>
-                      <StatusBadge status={w.status} />
-                    </div>
-                    {w.status === "pending" && (
-                      <div className="flex flex-wrap gap-2 mt-2 md:mt-0">
+              {selectedUser.pendingInvestments?.length ? (
+                selectedUser.pendingInvestments.map((p) => {
+                  const cycles = Math.floor((p.durationDays || 0) / 2);
+                  const profit = Number(p.amount || 0) * 0.3 * cycles;
+                  const finalReturn = Number(p.amount || 0) + profit;
+
+                  return (
+                    <div
+                      key={p._id}
+                      className="flex flex-col lg:flex-row justify-between items-start lg:items-center py-4 border-b last:border-b-0 gap-4"
+                    >
+                      <div className="space-y-2">
+                        <div>
+                          <p className="font-semibold text-gray-800">
+                            {p.symbol} - $
+                            {Number(p.amount || 0).toLocaleString()}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {p.investmentType} investment
+                          </p>
+                        </div>
+
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                          <div className="bg-gray-50 rounded-lg p-3">
+                            <p className="text-gray-500">Duration</p>
+                            <p className="font-semibold text-gray-800">
+                              {p.durationValue} {p.durationUnit}
+                            </p>
+                          </div>
+                          <div className="bg-green-50 rounded-lg p-3">
+                            <p className="text-green-700">Profit Rule</p>
+                            <p className="font-semibold text-green-700">
+                              30% / 2 days
+                            </p>
+                          </div>
+                          <div className="bg-blue-50 rounded-lg p-3">
+                            <p className="text-blue-700">Expected Profit</p>
+                            <p className="font-semibold text-blue-700">
+                              ${profit.toLocaleString()}
+                            </p>
+                          </div>
+                          <div className="bg-[#FFF6F2] rounded-lg p-3">
+                            <p className="text-[#7C1B01]">Final Return</p>
+                            <p className="font-semibold text-[#A72703]">
+                              ${finalReturn.toLocaleString()}
+                            </p>
+                          </div>
+                        </div>
+
+                        <StatusBadge status={p.status} />
+                      </div>
+
+                      {p.status === "pending" && (
                         <button
-                          disabled={actionLoadingId === w._id}
+                          disabled={actionLoadingId === p._id}
                           onClick={() =>
-                            handleAction(w._id, adminApproveWithdrawal)
+                            handleAction(p._id, adminApprovePayment)
                           }
-                          className="bg-green-200 hover:bg-green-300 text-green-800 px-4 py-1 rounded-md flex items-center gap-2"
+                          className="bg-green-200 hover:bg-green-300 text-green-800 px-4 py-2 rounded-md flex items-center gap-2"
                         >
-                          {actionLoadingId === w._id ? (
+                          {actionLoadingId === p._id ? (
                             "Loading..."
                           ) : (
                             <>
@@ -173,64 +212,10 @@ const Users = () => {
                             </>
                           )}
                         </button>
-                        <button
-                          disabled={actionLoadingId === w._id}
-                          onClick={() =>
-                            handleAction(w._id, adminRejectWithdrawal)
-                          }
-                          className="bg-red-200 hover:bg-red-300 text-red-800 px-4 py-1 rounded-md flex items-center gap-2"
-                        >
-                          {actionLoadingId === w._id ? (
-                            "Loading..."
-                          ) : (
-                            <>
-                              <FaTimesCircle /> Reject
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ))
-              ) : (
-                <p className="text-gray-400">No withdrawals</p>
-              )}
-            </div>
-
-            {/* Investments */}
-            <div className="bg-white shadow-sm rounded-lg p-4">
-              <h3 className="font-semibold text-gray-600 mb-3">Investments</h3>
-              {selectedUser.pendingInvestments?.length ? (
-                selectedUser.pendingInvestments.map((p) => (
-                  <div
-                    key={p._id}
-                    className="flex flex-col md:flex-row justify-between items-start md:items-center py-2 border-b last:border-b-0 gap-2"
-                  >
-                    <div>
-                      <p className="text-gray-700">
-                        ${p.amount} - {p.symbol}
-                      </p>
-                      <StatusBadge status={p.status} />
+                      )}
                     </div>
-                    {p.status === "pending" && (
-                      <button
-                        disabled={actionLoadingId === p._id}
-                        onClick={() =>
-                          handleAction(p._id, adminApprovePayment)
-                        }
-                        className="bg-green-200 hover:bg-green-300 text-green-800 px-4 py-1 rounded-md flex items-center gap-2 mt-2 md:mt-0"
-                      >
-                        {actionLoadingId === p._id ? (
-                          "Loading..."
-                        ) : (
-                          <>
-                            <FaCheckCircle /> Approve
-                          </>
-                        )}
-                      </button>
-                    )}
-                  </div>
-                ))
+                  );
+                })
               ) : (
                 <p className="text-gray-400">No payments</p>
               )}
@@ -245,4 +230,3 @@ const Users = () => {
 };
 
 export default Users;
-

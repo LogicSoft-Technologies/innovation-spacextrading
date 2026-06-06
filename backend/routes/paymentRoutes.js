@@ -1,22 +1,16 @@
-// payment Routes 
+// routes/paymentRoutes.js
 import express from "express";
 import multer from "multer";
 import fs from "fs";
 import path from "path";
-import {
-  createPayment,
-  approvePayment,
-  getUserPayments,
-  getPendingPayments,
-  completeInvestment,
-} from "../controllers/paymentController.js";
+import { createPayment } from "../controllers/paymentController.js";
 import { protect } from "../middlewares/userAuthMiddleware.js";
-import { protectAdmin } from "../middlewares/adminAuthMiddleware.js";
 
 const router = express.Router();
 
 // Ensure uploads/receipts folder exists
 const receiptsPath = path.join("uploads", "receipts");
+
 if (!fs.existsSync(receiptsPath)) {
   fs.mkdirSync(receiptsPath, { recursive: true });
 }
@@ -29,15 +23,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
-// User routes
+// User creates investment payment
 router.post("/", protect, upload.single("receiptImage"), createPayment);
-router.get("/user", protect, getUserPayments);
-
-// Admin routes
-router.get("/pending", protectAdmin, getPendingPayments);
-router.put("/:id/approve", protectAdmin, approvePayment);
-
-router.post("/complete", completeInvestment);
-
 
 export default router;
