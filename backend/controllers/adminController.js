@@ -22,6 +22,55 @@ const generateToken = (id) => {
   });
 };
 
+const WITHDRAWAL_INVESTMENT_THRESHOLD = 500000;
+
+const getAdminWithdrawalSnapshot = async (userId) => {
+  const deposits = await Deposit.find({ user: userId, status: "approved" });
+  const withdrawals = await Withdrawal.find({
+    user: userId,
+    status: "approved",
+  });
+  const payments = await Payment.find({ user: userId });
+
+  const totalDeposits = deposits.reduce(
+    (sum, deposit) => sum + Number(deposit.amount || 0),
+    0
+  );
+
+  const totalWithdrawals = withdrawals.reduce(
+    (sum, withdrawal) => sum + Number(withdrawal.amount || 0),
+    0
+  );
+
+  const totalInvested = payments
+    .filter((payment) => ["approved", "completed"].includes(payment.status))
+    .reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+
+  const completedInvestmentReturns = payments
+    .filter((payment) => payment.status === "completed")
+    .reduce((sum, payment) => {
+      const amount = Number(payment.amount || 0);
+      const durationDays = Number(payment.durationDays || 0);
+
+      if (durationDays > 0) {
+        return sum + calculateInvestmentReturns(amount, durationDays).returns;
+      }
+
+      return sum + Number(payment.returns || 0);
+    }, 0);
+
+  const walletBalance =
+    totalDeposits - totalWithdrawals + completedInvestmentReturns;
+
+  return {
+    totalDeposits,
+    totalWithdrawals,
+    totalInvested,
+    completedInvestmentReturns,
+    walletBalance,
+  };
+};
+
 /* ---------------- CREATE FIRST ADMIN ---------------- */
 export const createFirstAdmin = async (req, res) => {
   try {
@@ -517,49 +566,119 @@ export const adminRejectDeposit = asyncHandler(async (req, res) => {
 // ---------------- WITHDRAWAL APPROVED ----------------
 export const adminApproveWithdrawal = asyncHandler(async (req, res) => {
   const { withdrawalId } = req.params;
-  const withdrawal = await Withdrawal.findById(withdrawalId).populate("user");
-  if (!withdrawal) return res.status(404).json({ message: "Withdrawal not found" });
-  if (withdrawal.status !== "pending") return res.status(400).json({ message: "Already processed" });
 
-  if (withdrawal.amount > withdrawal.user.walletBalance) {
-    return res.status(400).json({ message: "User has insufficient wallet balance" });
+  const withdrawal = await Withdrawal.findById(withdrawalId).populate("user");
+
+  if (!withdrawal) {
+    return res.status(404).json({ message: "Withdrawal not found" });
   }
 
-  withdrawal.user.walletBalance -= withdrawal.amount;
-  await withdrawal.user.save();
+  if (withdrawal.status !== "pending") {
+    return res.status(400).json({ message: "Already processed" });
+  }
+
+  const user = await User.findById(withdrawal.user._id);
+
+  if (!user) {
+    return res.status(404).json({ message: "User not found" });
+  }
+
+  const snapshot = await getAdminWithdrawalSnapshot(user._id);
+
+  if (snapshot.totalInvested < WITHDRAWAL_INVESTMENT_THRESHOLD) {
+    return res.status(403).json({
+      message:
+        "This user has not invested up to $500,000 and is not eligible for withdrawal approval.",
+      rule: "MINIMUM_TOTAL_INVESTED_REQUIRED",
+      threshold: WITHDRAWAL_INVESTMENT_THRESHOLD,
+      totalInvested: snapshot.totalInvested,
+      remainingRequired:
+        WITHDRAWAL_INVESTMENT_THRESHOLD - snapshot.totalInvested,
+    });
+  }
+
+  if (withdrawal.amount > snapshot.walletBalance) {
+    return res.status(400).json({
+      message: "User has insufficient wallet balance",
+      walletBalance: snapshot.walletBalance,
+    });
+  }
 
   withdrawal.status = "approved";
   await withdrawal.save();
 
+  const updatedSnapshot = await getAdminWithdrawalSnapshot(user._id);
+  user.walletBalance = updatedSnapshot.walletBalance;
+  await user.save();
+
   await sendEmail({
-    to: withdrawal.user.email,
+    to: user.email,
     subject: "Withdrawal Approved",
-    text: `Hi ${withdrawal.user.firstName}, your withdrawal of $${withdrawal.amount} has been approved.`,
+    text: `Hi ${user.firstName}, your withdrawal of $${withdrawal.amount} has been approved.`,
     html: `
     <!DOCTYPE html>
     <html lang="en">
-    <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Withdrawal Approved</title></head>
-    <body style="margin:0;padding:0;font-family:Arial,sans-serif;background:#f5f5f5;">
-      <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;padding:40px 0;">
-        <tr><td align="center">
-          <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 6px 20px rgba(0,0,0,0.1);">
-            <tr><td style="background:#000000;text-align:center;padding:28px;">
-              <h1 style="color:#ffffff;margin:0;font-size:26px;">Innovation SpaceX Trading</h1>
-            </td></tr>
-            <tr><td style="padding:30px;color:#333;font-size:16px;line-height:1.6;">
-              <p>Hi <b>${withdrawal.user.firstName}</b>,</p>
-              <p>Your withdrawal request of <b>$${withdrawal.amount}</b> has been <span style="color:#A72703;font-weight:bold;">approved</span> and processed successfully.</p>
-              <p>Your updated wallet balance is: <b>$${withdrawal.user.walletBalance}</b></p>
-              <p style="margin-top:30px;">Thank you for trusting Innovation SpaceX Trading.</p>
-            </td></tr>
-            <tr><td style="background:#000000;text-align:center;padding:18px;">
-              <p style="color:#ffffff;font-size:13px;margin:0;">© ${new Date().getFullYear()} Innovation SpaceX Trading. All rights reserved.</p>
-            </td></tr>
-          </table>
-        </td></tr>
+    <head>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <title>Withdrawal Approved</title>
+    </head>
+    <body style="margin:0;padding:0;background:#f4f6f8;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f8;padding:36px 12px;">
+        <tr>
+          <td align="center">
+            <table width="100%" cellpadding="0" cellspacing="0" style="max-width:640px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 16px 40px rgba(15,23,42,0.12);">
+              <tr>
+                <td style="background:#0f172a;padding:28px 32px;">
+                  <p style="margin:0;color:#94a3b8;font-size:12px;letter-spacing:2px;text-transform:uppercase;font-weight:700;">
+                    Withdrawal Approved
+                  </p>
+                  <h1 style="margin:8px 0 0;color:#ffffff;font-size:26px;">
+                    Innovation SpaceX Trading
+                  </h1>
+                </td>
+              </tr>
+
+              <tr>
+                <td style="padding:32px;">
+                  <p style="margin:0 0 16px;font-size:16px;line-height:1.7;">
+                    Hi <strong>${user.firstName}</strong>,
+                  </p>
+
+                  <p style="margin:0 0 22px;font-size:16px;line-height:1.7;color:#334155;">
+                    Your withdrawal request has been approved and processed successfully.
+                  </p>
+
+                  <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:14px;padding:18px;margin:0 0 24px;">
+                    <p style="margin:0;color:#15803d;font-size:14px;line-height:1.8;">
+                      Amount: <strong>$${Number(withdrawal.amount).toLocaleString()}</strong><br/>
+                      Method: <strong>${withdrawal.method}</strong><br/>
+                      Total Invested Verified: <strong>$${Number(snapshot.totalInvested).toLocaleString()}</strong>
+                    </p>
+                  </div>
+
+                  <div style="text-align:center;">
+                    <a href="https://innovationspacextrading.com/dashboard"
+                      style="display:inline-block;background:#A72703;color:#ffffff;text-decoration:none;padding:13px 24px;border-radius:10px;font-size:15px;font-weight:700;">
+                      Go to Dashboard
+                    </a>
+                  </div>
+                </td>
+              </tr>
+
+              <tr>
+                <td style="background:#0f172a;text-align:center;padding:18px;">
+                  <p style="margin:0;color:#cbd5e1;font-size:12px;">
+                    &copy; ${new Date().getFullYear()} Innovation SpaceX Trading. All rights reserved.
+                  </p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
       </table>
     </body>
-    </html>`
+    </html>`,
   });
 
   res.json({ message: "Withdrawal approved", withdrawal });
