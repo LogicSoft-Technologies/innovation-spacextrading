@@ -21,7 +21,7 @@ const Contact = () => {
         <p className="text-black/70 text-lg sm:text-xl max-w-3xl mx-auto">
           We’re here to help you 24/7. Whether you have questions about your
           investments, need technical support, or just want to learn more about
-          SpaceX Innovation Trading — our team is ready to assist you anytime.
+          SpaceX Innovation Trading our team is ready to assist you anytime.
         </p>
       </motion.div>
 
@@ -37,7 +37,7 @@ const Contact = () => {
             {
               icon: <Mail className="text-white w-6 h-6" />,
               title: "Email Support",
-              info: <>Reach us anytime at <a href="mailto:support@spacexinnovation.com" className="text-[#A72703] font-medium hover:underline">support@spacexinnovation.com</a></>
+              info: <>Reach us anytime at <a href="mailto:support@innovationxtrading.net" className="text-[#A72703] font-medium hover:underline">support@innovationxtrading.net</a></>
             },
             {
               icon: <Phone className="text-white w-6 h-6" />,

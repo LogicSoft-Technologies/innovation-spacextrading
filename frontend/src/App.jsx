@@ -57,7 +57,14 @@ import Contact from "./pages/Company/Contact";
 
 // ---------- Protected Route Wrapper ----------
 const ProtectedRoute = ({ children }) => {
-  const { user } = useContext(AuthContext);
+  const { user, loading } = useContext(AuthContext);
+
+  if (loading)
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#A72703] border-t-transparent" />
+      </div>
+    );
   if (!user) return <Navigate to="/sign-in" />;
   return children;
 };
@@ -286,10 +293,6 @@ const AppContent = () => {
   );
 };
 
-const App = () => (
-  
-    <AppContent /> 
-
-);
+const App = () => <AppContent />;
 
 export default App;

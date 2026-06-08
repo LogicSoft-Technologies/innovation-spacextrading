@@ -7,10 +7,8 @@ import {
   ShieldAlert,
   Wallet,
   Landmark,
-  Mail,
   BadgeDollarSign,
   ArrowRight,
-  AlertTriangle,
 } from "lucide-react";
 import api from "../../../config/api";
 import { AuthContext } from "../../Context/AuthContext";
@@ -47,19 +45,54 @@ const Withdrawal = ({ onClose }) => {
 
   const methodFields = {
     "Bank Transfer": [
-      { key: "name", label: "Account Holder Name", type: "text", placeholder: "Full Name" },
-      { key: "iban", label: "IBAN / Account Number", type: "text", placeholder: "IBAN / Account Number" },
-      { key: "bank", label: "Bank Name", type: "text", placeholder: "Bank Name" },
-      { key: "swift", label: "SWIFT/BIC Code", type: "text", placeholder: "SWIFT/BIC" },
+      {
+        key: "name",
+        label: "Account Holder Name",
+        type: "text",
+        placeholder: "Full Name",
+      },
+      {
+        key: "iban",
+        label: "IBAN / Account Number",
+        type: "text",
+        placeholder: "IBAN / Account Number",
+      },
+      {
+        key: "bank",
+        label: "Bank Name",
+        type: "text",
+        placeholder: "Bank Name",
+      },
+      {
+        key: "swift",
+        label: "SWIFT/BIC Code",
+        type: "text",
+        placeholder: "SWIFT/BIC",
+      },
     ],
     PayPal: [
-      { key: "email", label: "PayPal Email", type: "email", placeholder: "Enter PayPal email" },
+      {
+        key: "email",
+        label: "PayPal Email",
+        type: "email",
+        placeholder: "Enter PayPal email",
+      },
     ],
     CashApp: [
-      { key: "cashAppId", label: "CashApp ID", type: "text", placeholder: "Enter CashApp ID" },
+      {
+        key: "cashAppId",
+        label: "CashApp ID",
+        type: "text",
+        placeholder: "Enter CashApp ID",
+      },
     ],
     Wallet: [
-      { key: "wallet", label: "Wallet Address", type: "text", placeholder: "Enter Wallet Address" },
+      {
+        key: "wallet",
+        label: "Wallet Address",
+        type: "text",
+        placeholder: "Enter Wallet Address",
+      },
     ],
   };
 
@@ -80,14 +113,7 @@ const Withdrawal = ({ onClose }) => {
     fetchDashboard();
   }, []);
 
-  const totalInvested = Number(dashboardData?.totalInvested || 0);
   const walletBalance = Number(dashboardData?.walletBalance || 0);
-  const remainingRequired = Math.max(WITHDRAWAL_THRESHOLD - totalInvested, 0);
-  const progressPercent = Math.min(
-    100,
-    (totalInvested / WITHDRAWAL_THRESHOLD) * 100
-  );
-
   const selectedFields = methodFields[method] || [];
 
   const formIsValid = useMemo(() => {
@@ -232,14 +258,14 @@ const Withdrawal = ({ onClose }) => {
             </p>
             <h2 className="mt-2 text-2xl font-semibold">Withdraw Funds</h2>
             <p className="mt-2 max-w-2xl text-sm text-slate-400">
-              Submit a withdrawal request after providing payout details. Withdrawal access requires at least $500,000 in total approved/completed investments.
+              Enter your preferred payout details and place your withdrawal request .
             </p>
           </div>
 
           <div className="rounded-xl border border-slate-800 bg-slate-900 px-4 py-3">
-            <p className="text-xs text-slate-400">Investment Threshold</p>
+            <p className="text-xs text-slate-400">Wallet Balance</p>
             <p className="text-lg font-semibold text-green-400">
-              {formatCurrency(WITHDRAWAL_THRESHOLD)}
+              {loadingDashboard ? "Loading..." : formatCurrency(walletBalance)}
             </p>
           </div>
         </div>
@@ -313,27 +339,13 @@ const Withdrawal = ({ onClose }) => {
               />
             </div>
 
-            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="mt-0.5 h-5 w-5 text-amber-700" />
-                <div>
-                  <p className="text-sm font-semibold text-amber-800">
-                    Withdrawal eligibility is verified after submission.
-                  </p>
-                  <p className="mt-1 text-sm text-amber-700">
-                    You must have invested at least {formatCurrency(WITHDRAWAL_THRESHOLD)} before withdrawals can be placed.
-                  </p>
-                </div>
-              </div>
-            </div>
-
             <button
               type="submit"
               disabled={!formIsValid || loading}
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#A72703] px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-[#A72703]/20 hover:bg-[#7C1B01] disabled:bg-slate-400 disabled:shadow-none"
             >
               {loading && <Loader className="h-5 w-5 animate-spin" />}
-              {loading ? "Submitting..." : "Request Withdrawal"}
+              {loading ? "Submitting..." : "Place Withdrawal"}
               {!loading && <ArrowRight className="h-4 w-4" />}
             </button>
           </form>
@@ -349,7 +361,7 @@ const Withdrawal = ({ onClose }) => {
                     Account Summary
                   </p>
                   <p className="text-xs text-slate-500">
-                    Live dashboard values
+                    Current wallet information
                   </p>
                 </div>
               </div>
@@ -357,40 +369,11 @@ const Withdrawal = ({ onClose }) => {
               {loadingDashboard ? (
                 <p className="text-sm text-slate-500">Loading summary...</p>
               ) : (
-                <div className="space-y-3">
-                  <div className="rounded-xl bg-slate-50 p-4">
-                    <p className="text-xs text-slate-500">Wallet Balance</p>
-                    <p className="mt-1 font-semibold text-slate-950">
-                      {formatCurrency(walletBalance)}
-                    </p>
-                  </div>
-
-                  <div className="rounded-xl bg-slate-50 p-4">
-                    <p className="text-xs text-slate-500">Total Invested</p>
-                    <p className="mt-1 font-semibold text-slate-950">
-                      {formatCurrency(totalInvested)}
-                    </p>
-                  </div>
-
-                  <div className="rounded-xl bg-[#FFF6F2] p-4">
-                    <p className="text-xs text-[#7C1B01]">Remaining Required</p>
-                    <p className="mt-1 font-semibold text-[#A72703]">
-                      {formatCurrency(remainingRequired)}
-                    </p>
-                  </div>
-
-                  <div>
-                    <div className="mb-2 flex justify-between text-xs text-slate-500">
-                      <span>Eligibility Progress</span>
-                      <span>{progressPercent.toFixed(1)}%</span>
-                    </div>
-                    <div className="h-2 rounded-full bg-slate-100">
-                      <div
-                        className="h-2 rounded-full bg-[#A72703]"
-                        style={{ width: `${progressPercent}%` }}
-                      />
-                    </div>
-                  </div>
+                <div className="rounded-xl bg-slate-50 p-4">
+                  <p className="text-xs text-slate-500">Available Balance</p>
+                  <p className="mt-1 text-lg font-semibold text-slate-950">
+                    {formatCurrency(walletBalance)}
+                  </p>
                 </div>
               )}
             </div>
@@ -402,10 +385,10 @@ const Withdrawal = ({ onClose }) => {
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-slate-950">
-                    Threshold Rule
+                    Payout Details
                   </p>
                   <p className="text-xs text-slate-500">
-                    Based on total invested, not total accumulated balance.
+                    Provide accurate information for smooth processing.
                   </p>
                 </div>
               </div>
@@ -435,7 +418,8 @@ const Withdrawal = ({ onClose }) => {
             Request Submitted
           </h3>
           <p className="mt-2 max-w-md text-sm text-slate-600">
-            Your withdrawal request has been submitted and is pending admin review.
+            Your withdrawal request has been submitted and is pending admin
+            review.
           </p>
         </div>
       )}
