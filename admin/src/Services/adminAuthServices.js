@@ -3,8 +3,13 @@ import api from "../config/api";
 
 // ===== SIGNUP =====
 export const adminSignup = async (firstName, lastName, email, password) => {
-  const res = await api.post("/auth/signup", { firstName, lastName, email, password });
-  return res.data; // backend returns { admin, token }
+  const res = await api.post("/auth/signup", {
+    firstName,
+    lastName,
+    email,
+    password,
+  });
+  return res.data;
 };
 
 // ===== LOGIN =====
@@ -12,7 +17,7 @@ export const adminLoginService = async (email, password) => {
   const res = await api.post("/auth/login", { email, password });
 
   localStorage.setItem("adminToken", res.data.token);
-  return res.data; // { admin, token }
+  return res.data;
 };
 
 // ===== LOGOUT =====
@@ -44,7 +49,10 @@ export const adminResetPassword = async (token, password) => {
 };
 
 export const adminChangePassword = async (currentPassword, newPassword) => {
-  const res = await api.post("/change-password", { currentPassword, newPassword });
+  const res = await api.post("/change-password", {
+    currentPassword,
+    newPassword,
+  });
   return res.data;
 };
 
@@ -55,6 +63,11 @@ export const adminGetDashboardData = async () => {
 };
 
 export const adminGetUsers = async () => {
+  const res = await api.get("/users");
+  return res.data;
+};
+
+export const adminGetUsersWithRequests = async () => {
   const res = await api.get("/users");
   return res.data;
 };
@@ -78,15 +91,8 @@ export const adminUpdateProfile = async (profile) => {
 // ===== CHECK IF ADMIN EXISTS =====
 export const checkAdminExists = async () => {
   const res = await api.get("/exists");
-  return res.data.exists; // return boolean
+  return res.data.exists;
 };
-
-// Fetch all users with their pending requests
-export const adminGetUsersWithRequests = async () => {
-  const res = await api.get("/users");
-  return res.data;
-};
-
 
 // ===== APPROVE / REJECT USER REQUESTS =====
 export const adminApproveDeposit = async (depositId) => {

@@ -17,7 +17,8 @@ import {
   adminRejectWithdrawal,
   adminApprovePayment,
   getDashboardData,
-  adminSendEmail
+  adminSendEmail,
+  adminDeleteUser
 } from "../controllers/adminController.js";
 import { protectAdmin } from "../middlewares/adminAuthMiddleware.js";
 import { uploadEmailAttachment } from "../middlewares/adminMulter.js"; 
@@ -36,6 +37,7 @@ router.post("/reset-password/:token", resetPassword);
 router.get("/profile", protectAdmin, getProfile);
 router.post("/change-password", protectAdmin, changePassword);
 router.get("/users", protectAdmin, getAllUsersWithRequests);
+router.delete("/users/:userId", protectAdmin, adminDeleteUser);
 
 // Deposits
 router.patch("/deposit/approve/:depositId", protectAdmin, adminApproveDeposit);

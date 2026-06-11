@@ -392,33 +392,104 @@ export const getAllUsersWithRequests = async (req, res) => {
 
     const usersWithRequests = await Promise.all(
       users.map(async (user) => {
-        const pendingInvestments = await Payment.find({
-          user: user._id,
-          status: "pending",
+        const investments = await Payment.find({ user: user._id }).sort({
+          createdAt: -1,
         });
-        const pendingDeposits = await Deposit.find({
-          user: user._id,
-          status: "pending",
+
+        const deposits = await Deposit.find({ user: user._id }).sort({
+          createdAt: -1,
         });
-        const pendingWithdrawals = await Withdrawal.find({
-          user: user._id,
-          status: "pending",
+
+        const withdrawals = await Withdrawal.find({ user: user._id }).sort({
+          createdAt: -1,
+        });
+
+        const investmentsWithMeta = investments.map((investment) => {
+          const durationDays = Number(investment.durationDays || 0);
+          const amount = Number(investment.amount || 0);
+
+          let profit = Number(investment.profit || 0);
+          let returns = Number(investment.returns || 0);
+          let twoDayCycles = Number(investment.twoDayCycles || 0);
+
+          if (durationDays > 0) {
+            const computed = calculateInvestmentReturns(amount, durationDays);
+            profit = computed.profit;
+            returns = computed.returns;
+            twoDayCycles = computed.twoDayCycles;
+          }
+
+          let timeLeft = null;
+
+          if (investment.status === "approved" && investment.completedAt) {
+            timeLeft = Math.max(
+              0,
+              Math.floor(
+                (new Date(investment.completedAt).getTime() - Date.now()) / 1000
+              )
+            );
+          }
+
+          return {
+            ...investment.toObject(),
+            profit,
+            returns,
+            twoDayCycles,
+            timeLeft,
+          };
         });
 
         return {
           ...user.toObject(),
-          pendingInvestments,
-          pendingDeposits,
-          pendingWithdrawals,
+          investments: investmentsWithMeta,
+          deposits,
+          withdrawals,
+          pendingInvestments: investmentsWithMeta.filter(
+            (item) => item.status === "pending"
+          ),
+          activeInvestments: investmentsWithMeta.filter(
+            (item) => item.status === "approved"
+          ),
+          completedInvestments: investmentsWithMeta.filter(
+            (item) => item.status === "completed"
+          ),
+          pendingDeposits: deposits.filter((item) => item.status === "pending"),
+          pendingWithdrawals: withdrawals.filter(
+            (item) => item.status === "pending"
+          ),
         };
       })
     );
 
     res.json(usersWithRequests);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error("getAllUsersWithRequests error:", error);
+    res.status(500).json({ message: error.message || "Server error" });
   }
 };
+
+export const adminDeleteUser = asyncHandler(async (req, res) => {
+  const { userId } = req.params;
+
+  const user = await User.findById(userId);
+
+  if (!user) {
+    return res.status(404).json({ message: "User not found" });
+  }
+
+  await Promise.all([
+    Payment.deleteMany({ user: userId }),
+    Deposit.deleteMany({ user: userId }),
+    Withdrawal.deleteMany({ user: userId }),
+  ]);
+
+  await User.findByIdAndDelete(userId);
+
+  res.json({
+    message: "User and all related records deleted successfully",
+    deletedUserId: userId,
+  });
+});
 
 // Approve a user deposit
 export const adminApproveDeposit = asyncHandler(async (req, res) => {
